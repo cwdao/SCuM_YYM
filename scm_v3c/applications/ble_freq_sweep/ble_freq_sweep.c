@@ -19,9 +19,9 @@
 
 #define CHANNEL             0       // ble channel
 
-#define TXPOWER             0xC5    // used for ibeacon pkt
+#define TXPOWER             0xD8    // used for ibeacon pkt
 
-#define NUMPKT_PER_CFG      1
+#define NUMPKT_PER_CFG      10
 #define STEPS_PER_CONFIG    32
 #define TIMER_PERIOD        2000  // 500 = 1ms@500kHz
 
@@ -47,8 +47,8 @@
 #endif
 
 #ifdef HS_3
-    #define MID_START   17
-    #define MID_END     22
+    #define MID_START   0
+    #define MID_END     31
 #endif
 
 
@@ -225,12 +225,13 @@ int main(void) {
 
 void cb_timer(void) {
     app_vars.sendDone = true;
+
 }
 
 void    cb_endFrame_tx(uint32_t timestamp){
     
     printf("this is end of tx \r\n");
-    
+	
 }
 
 //==== delay
@@ -267,9 +268,15 @@ uint8_t prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine) {
     
     app_vars.pdu[i++] = flipChar(0x20);
     app_vars.pdu[i++] = flipChar(0x03);
+//		app_vars.pdu[i++] = 0x20;
+//    app_vars.pdu[i++] = 0x03;
+	
     app_vars.pdu[i++] = flipChar(coarse);
     app_vars.pdu[i++] = flipChar(mid);
     app_vars.pdu[i++] = flipChar(fine);
+//		app_vars.pdu[i++] = flipChar(0xAB);
+//    app_vars.pdu[i++] = flipChar(0xAB);
+//    app_vars.pdu[i++] = flipChar(0xAB);
     
     field_len += 5;
     

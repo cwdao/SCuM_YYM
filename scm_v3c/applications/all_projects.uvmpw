@@ -5,7 +5,7 @@
 
   <Header>### uVision Project, (C) Keil Software</Header>
 
-  <WorkspaceName>WorkSpace</WorkspaceName>
+  <WorkspaceName>D:\OneDrive - HKUST (Guangzhou)\SchoolTasks\SCuMRobot\origin\scum-test-code\scm_v3c\applications\all_projects.uvmpw</WorkspaceName>
 
   <project>
     <PathAndName>.\freq_sweep_rx_simple\freq_sweep_rx_simple.uvprojx</PathAndName>

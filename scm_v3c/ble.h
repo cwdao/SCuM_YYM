@@ -14,6 +14,11 @@
 #define BACCESS_ADDRESS3      0x91
 #define BACCESS_ADDRESS4      0x71
 
+//#define BACCESS_ADDRESS1      0xD6
+//#define BACCESS_ADDRESS2      0xBE
+//#define BACCESS_ADDRESS3      0x89
+//#define BACCESS_ADDRESS4      0x8E
+
 #define PDU_HEADER1           0x40
 #define PDU_HEADER2           0xA4 // PDU is 37 bytes long (6 bytes advertiser address + 31 bytes data).
 
