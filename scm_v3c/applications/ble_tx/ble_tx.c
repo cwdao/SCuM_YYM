@@ -105,7 +105,7 @@ int main(void) {
     printf("Cal complete\r\n");
 
     // Disable static divider to save power
-	divProgram(480, 0, 0);
+		divProgram(480, 0, 0);
 
     // Configure coarse, mid, and fine codes for TX.
 #if BLE_CALIBRATE_LC
@@ -138,18 +138,20 @@ void    cb_timer(void) {
 }
 
 void transmit_ble_packet(void) {
-    int t, tx_fine;
+    int t, tx_fine, tx_mid;
 
 #if BLE_SWEEP_FINE
-    for (tx_fine = 0; tx_fine < 32; ++tx_fine) {
-        LC_FREQCHANGE(app_vars.tx_coarse, app_vars.tx_mid, tx_fine);
-        printf("Transmitting on %u %u %u\n", app_vars.tx_coarse, app_vars.tx_mid, tx_fine);
+	  for (tx_mid = 20; tx_mid < 32; ++tx_mid){
+			for (tx_fine = 0; tx_fine < 32; ++tx_fine) {
+					LC_FREQCHANGE(app_vars.tx_coarse, app_vars.tx_mid, tx_fine);
+					printf("Transmitting on %u %u %u\n", app_vars.tx_coarse, app_vars.tx_mid, tx_fine);
 
-        // Wait for frequency to settle.
-        for (t = 0; t < 5000; ++t);
+					// Wait for frequency to settle.
+					for (t = 0; t < 5000; ++t);
 
-        ble_transmit();
-    }
+					ble_transmit();
+			}
+		}
 #else
     LC_FREQCHANGE(app_vars.tx_coarse, app_vars.tx_mid, app_vars.tx_fine);
     printf("Transmitting on %u %u %u\n", app_vars.tx_coarse, app_vars.tx_mid, app_vars.tx_fine);

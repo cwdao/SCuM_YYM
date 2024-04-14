@@ -17,7 +17,7 @@
 #define CRC_VALUE           (*((unsigned int *) 0x0000FFFC))
 #define CODE_LENGTH         (*((unsigned int *) 0x0000FFF8))
 
-#define CHANNEL             0       // ble channel
+#define CHANNEL             37       // ble channel
 
 #define TXPOWER             0xD8    // used for ibeacon pkt
 
@@ -27,7 +27,7 @@
 
 // only this coarse settings are swept, 
 // channel 37 and 0 are known within the setting scope of coarse=24
-#define CFG_COARSE          24
+#define CFG_COARSE          23
 
 #define HS_3
 
