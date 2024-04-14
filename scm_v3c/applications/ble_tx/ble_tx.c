@@ -17,6 +17,7 @@
 #define CODE_LENGTH         (*((unsigned int *) 0x0000FFF8))
 
 #define TIMER_PERIOD        50000             ///< 500 = 1ms@500kHz
+#define CHANNEL             37       // ble channel
 
 #define BLE_CALIBRATE_LC    false
 #define BLE_SWEEP_FINE      true
@@ -96,6 +97,29 @@ int main(void) {
     optical_setLCTarget(250182);
 #endif
 
+// Initial frequency calibration will tune the frequencies for HCLK, the RX/TX chip clocks, and the LO
+    
+    optical_enableLCCalibration();
+
+    // Turn on LO, DIV, PA, and IF
+    ANALOG_CFG_REG__10 = 0x78;
+
+    // Turn off polyphase and disable mixer
+    ANALOG_CFG_REG__16 = 0x6;
+
+#if CHANNEL==37
+    // For TX, LC target freq = 2.402G - 0.25M = 2.40175 GHz.
+    optical_setLCTarget(250182);
+#elif CHANNEL==0
+    
+    // For TX, LC target freq = 2.404G - 0.25M = 2.40375 GHz.
+    optical_setLCTarget(250390);
+#endif
+
+    // For the LO, calibration for RX channel 11, so turn on AUX, IF, and LO LDOs
+    // by calling radio rxEnable
+    radio_rxEnable();
+
     // Enable optical SFD interrupt for optical calibration
     optical_enable();
 
@@ -103,23 +127,27 @@ int main(void) {
     while(!optical_getCalibrationFinished());
 
     printf("Cal complete\r\n");
+    
+    // Enable interrupts for the radio FSM (Not working for ble)
+    radio_enable_interrupts();
 
-    // Disable static divider to save power
-		divProgram(480, 0, 0);
-
-    // Configure coarse, mid, and fine codes for TX.
+    radio_rfOff();
+    
+    ble_set_channel(CHANNEL);
+		
+		//test frame in Nordic
+		ble_gen_packet();
+		
 #if BLE_CALIBRATE_LC
     app_vars.tx_coarse = optical_getLCCoarse();
     app_vars.tx_mid = optical_getLCMid();
     app_vars.tx_fine = optical_getLCFine();
 #else
     // CHANGE THESE VALUES AFTER LC CALIBRATION.
-    app_vars.tx_coarse = 24;
+    app_vars.tx_coarse = 23;
     app_vars.tx_mid = 11;
     app_vars.tx_fine = 23;
 #endif
-
-    ble_gen_packet();
 
     while (1) {
         transmit_ble_packet();
@@ -141,15 +169,16 @@ void transmit_ble_packet(void) {
     int t, tx_fine, tx_mid, times;
 
 #if BLE_SWEEP_FINE
-	  for (tx_mid = 0; tx_mid < 20; ++tx_mid){
+	  for (tx_mid = 15; tx_mid < 32; ++tx_mid){
 			for (tx_fine = 0; tx_fine < 32; ++tx_fine) {
+					radio_rfOff();
 					LC_FREQCHANGE(app_vars.tx_coarse, tx_mid, tx_fine);
+					// delay for cfg setting
+					for (t=0;t<0x2FF;t++);
 					printf("Transmitting on %u %u %u\n", app_vars.tx_coarse, tx_mid, tx_fine);
-					for(times = 0; times <10; ++times){
-						// Wait for frequency to settle.
-						for (t = 0; t < 5000; ++t);
-						ble_transmit();
-					}
+					// Wait for frequency to settle.
+					for (t = 0; t < 5000; ++t);
+					ble_transmit();
 			}
 		}
 #else

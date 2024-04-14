@@ -47,8 +47,8 @@
 #endif
 
 #ifdef HS_3
-    #define MID_START   18
-    #define MID_END     31
+    #define MID_START   22
+    #define MID_END     24
 #endif
 
 

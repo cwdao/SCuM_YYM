@@ -58,7 +58,7 @@ void ble_init(void) {
     ble_vars.AdvA[5] = 0xCC;
 
     // Set default channel.
-    ble_vars.channel = 0;
+    ble_vars.channel = 37;
 
     // Set default name.
     ble_vars.name_tx_en = true;
