@@ -50,15 +50,15 @@ void ble_init(void) {
     memset(&ble_vars, 0, sizeof(ble_vars));
 
     // Set default advertiser address.
-    ble_vars.AdvA[0] = 0x00;
-    ble_vars.AdvA[1] = 0x02;
-    ble_vars.AdvA[2] = 0x72;
-    ble_vars.AdvA[3] = 0x32;
-    ble_vars.AdvA[4] = 0x80;
-    ble_vars.AdvA[5] = 0xC6;
+    ble_vars.AdvA[0] = 0xCC;
+    ble_vars.AdvA[1] = 0xBB;
+    ble_vars.AdvA[2] = 0xAA;
+    ble_vars.AdvA[3] = 0xAA;
+    ble_vars.AdvA[4] = 0xBB;
+    ble_vars.AdvA[5] = 0xCC;
 
     // Set default channel.
-    ble_vars.channel = 37;
+    ble_vars.channel = 0;
 
     // Set default name.
     ble_vars.name_tx_en = true;
@@ -110,53 +110,59 @@ void ble_gen_packet(void) {
         }
     }
     
-    if (ble_vars.lc_freq_codes_tx_en) {
-        pdu_crc[j++] = LC_FREQCODES_HEADER;
-        pdu_crc[j++] = LC_FREQCODES_GAP_CODE;
+//    if (ble_vars.lc_freq_codes_tx_en) {
+//        pdu_crc[j++] = LC_FREQCODES_HEADER;
+//        pdu_crc[j++] = LC_FREQCODES_GAP_CODE;
 
-        pdu_crc[j++] = flipChar((ble_vars.lc_freq_codes >> 8) & 0xFF); // LC freq codes MSB
-        pdu_crc[j++] = flipChar(ble_vars.lc_freq_codes & 0xFF);        // LC freq codes LSB
-    }
+//        pdu_crc[j++] = flipChar((ble_vars.lc_freq_codes >> 8) & 0xFF); // LC freq codes MSB
+//        pdu_crc[j++] = flipChar(ble_vars.lc_freq_codes & 0xFF);        // LC freq codes LSB
+//    }
 
-    if (ble_vars.counters_tx_en) {
-        pdu_crc[j++] = COUNTERS_HEADER;
-        pdu_crc[j++] = COUNTERS_GAP_CODE;
+//    if (ble_vars.counters_tx_en) {
+//        pdu_crc[j++] = COUNTERS_HEADER;
+//        pdu_crc[j++] = COUNTERS_GAP_CODE;
 
-        pdu_crc[j++] = flipChar((ble_vars.count_2M >> 24) & 0xFF);  // count_2M MSB
-        pdu_crc[j++] = flipChar((ble_vars.count_2M >> 16) & 0xFF);
-        pdu_crc[j++] = flipChar((ble_vars.count_2M >> 8) & 0xFF);
-        pdu_crc[j++] = flipChar(ble_vars.count_2M & 0xFF);          // count_2M LSB
+//        pdu_crc[j++] = flipChar((ble_vars.count_2M >> 24) & 0xFF);  // count_2M MSB
+//        pdu_crc[j++] = flipChar((ble_vars.count_2M >> 16) & 0xFF);
+//        pdu_crc[j++] = flipChar((ble_vars.count_2M >> 8) & 0xFF);
+//        pdu_crc[j++] = flipChar(ble_vars.count_2M & 0xFF);          // count_2M LSB
 
-        pdu_crc[j++] = flipChar((ble_vars.count_32k >> 24) & 0xFF); // count_32k MSB
-        pdu_crc[j++] = flipChar((ble_vars.count_32k >> 16) & 0xFF);
-        pdu_crc[j++] = flipChar((ble_vars.count_32k >> 8) & 0xFF);
-        pdu_crc[j++] = flipChar(ble_vars.count_32k & 0xFF);         // count_32k LSB
-    }
+//        pdu_crc[j++] = flipChar((ble_vars.count_32k >> 24) & 0xFF); // count_32k MSB
+//        pdu_crc[j++] = flipChar((ble_vars.count_32k >> 16) & 0xFF);
+//        pdu_crc[j++] = flipChar((ble_vars.count_32k >> 8) & 0xFF);
+//        pdu_crc[j++] = flipChar(ble_vars.count_32k & 0xFF);         // count_32k LSB
+//    }
 
-    if (ble_vars.temp_tx_en) {
-        double temp_kelvin = ble_vars.temp + 273.15; // Temperature in Kelvin
-        int temp_payload = 100 * temp_kelvin + 1;    // Floating point error
+//    if (ble_vars.temp_tx_en) {
+//        double temp_kelvin = ble_vars.temp + 273.15; // Temperature in Kelvin
+//        int temp_payload = 100 * temp_kelvin + 1;    // Floating point error
 
-        pdu_crc[j++] = TEMP_HEADER;
-        pdu_crc[j++] = TEMP_GAP_CODE;
+//        pdu_crc[j++] = TEMP_HEADER;
+//        pdu_crc[j++] = TEMP_GAP_CODE;
 
-        pdu_crc[j++] = flipChar((temp_payload >> 8) & 0xFF); // Temperature MSB
-        pdu_crc[j++] = flipChar(temp_payload & 0xFF);        // Temperature LSB
-    }
+//        pdu_crc[j++] = flipChar((temp_payload >> 8) & 0xFF); // Temperature MSB
+//        pdu_crc[j++] = flipChar(temp_payload & 0xFF);        // Temperature LSB
+//    }
 
-    if (ble_vars.data_tx_en) {
-        pdu_crc[j++] = CUSTOM_DATA_HEADER;
-        pdu_crc[j++] = CUSTOM_DATA_GAP_CODE;
+//    if (ble_vars.data_tx_en) {
+//        pdu_crc[j++] = CUSTOM_DATA_HEADER;
+//        pdu_crc[j++] = CUSTOM_DATA_GAP_CODE;
 
-        for (k = 0; k < CUSTOM_DATA_LENGTH; ++k) {
-            pdu_crc[j++] = flipChar(ble_vars.data[k]);
-        }
-    }
+//        for (k = 0; k < CUSTOM_DATA_LENGTH; ++k) {
+//            pdu_crc[j++] = flipChar(ble_vars.data[k]);
+//        }
+//    }
     
     ble_append_crc(&pdu_crc[0] ,PDU_LENGTH);
     ble_whitening(&pdu_crc[0], PDU_LENGTH + CRC_LENGTH);
 
     memcpy(&ble_vars.packet[i], pdu_crc, PDU_LENGTH + CRC_LENGTH);
+		
+		printf("pkt : ");
+    for (j=0;j<PDU_LENGTH + CRC_LENGTH+ 5;j++) {
+        printf("%x ", flipChar(ble_vars.packet[j]));
+		}
+		printf("\r\n");
 }
 
 void ble_prepare_packt(uint8_t* pdu, uint8_t pdu_length){

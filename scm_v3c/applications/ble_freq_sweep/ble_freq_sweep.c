@@ -47,7 +47,7 @@
 #endif
 
 #ifdef HS_3
-    #define MID_START   0
+    #define MID_START   18
     #define MID_END     31
 #endif
 
@@ -173,6 +173,9 @@ int main(void) {
     radio_rfOff();
     
     ble_set_channel(CHANNEL);
+		
+		//test frame in Nordic
+		ble_gen_packet();
     
     while (1) {
         
@@ -191,8 +194,8 @@ int main(void) {
                     
                     radio_rfOff();
                     
-                    app_vars.pdu_len = prepare_freq_setting_pdu(CFG_COARSE, cfg_mid, cfg_fine);
-                    ble_prepare_packt(&app_vars.pdu[0], app_vars.pdu_len);
+//                    app_vars.pdu_len = prepare_freq_setting_pdu(CFG_COARSE, cfg_mid, cfg_fine);
+//                    ble_prepare_packt(&app_vars.pdu[0], app_vars.pdu_len);
                     
                     LC_FREQCHANGE(CFG_COARSE, cfg_mid, cfg_fine);
                     

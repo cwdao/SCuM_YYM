@@ -19,13 +19,13 @@
 //#define BACCESS_ADDRESS3      0x89
 //#define BACCESS_ADDRESS4      0x8E
 
-#define PDU_HEADER1           0x40
-#define PDU_HEADER2           0xA4 // PDU is 37 bytes long (6 bytes advertiser address + 31 bytes data).
+#define PDU_HEADER1           0x42
+#define PDU_HEADER2           0xB0 // PDU is 37 bytes long (6 bytes advertiser address + 31 bytes data).
 
 // Short name.
 #define NAME_LENGTH           5
 #define NAME_HEADER           0x60 // Name is 6 bytes long (1 byte GAP code + 5 bytes data).
-#define NAME_GAP_CODE         0x10
+#define NAME_GAP_CODE         0x90
 
 // LC frequency codes (coarse+mid+fine).
 #define LC_FREQCODES_LENGTH   2
@@ -48,7 +48,7 @@
 #define CUSTOM_DATA_GAP_CODE  0xC3 // Custom GAP code for custom data (0xC3 LSB first).
 
 #define ADVA_LENGTH           6    // Advertiser address is 6 bytes long.
-#define PDU_LENGTH            0x23 // 2 byte PDU header + 37 bytes PDU.
+#define PDU_LENGTH            0x0F // 2 byte PDU header + 37 bytes PDU.
 #define CRC_LENGTH            3    // CRC is 3 bytes long.
 
 #define MAX_DATA_LENGTH       31   // Maximum data length is 31 bytes.

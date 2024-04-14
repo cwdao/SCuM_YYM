@@ -114,7 +114,7 @@ int main(void) {
     app_vars.tx_fine = optical_getLCFine();
 #else
     // CHANGE THESE VALUES AFTER LC CALIBRATION.
-    app_vars.tx_coarse = 23;
+    app_vars.tx_coarse = 24;
     app_vars.tx_mid = 11;
     app_vars.tx_fine = 23;
 #endif
@@ -138,18 +138,18 @@ void    cb_timer(void) {
 }
 
 void transmit_ble_packet(void) {
-    int t, tx_fine, tx_mid;
+    int t, tx_fine, tx_mid, times;
 
 #if BLE_SWEEP_FINE
-	  for (tx_mid = 20; tx_mid < 32; ++tx_mid){
+	  for (tx_mid = 0; tx_mid < 20; ++tx_mid){
 			for (tx_fine = 0; tx_fine < 32; ++tx_fine) {
-					LC_FREQCHANGE(app_vars.tx_coarse, app_vars.tx_mid, tx_fine);
-					printf("Transmitting on %u %u %u\n", app_vars.tx_coarse, app_vars.tx_mid, tx_fine);
-
-					// Wait for frequency to settle.
-					for (t = 0; t < 5000; ++t);
-
-					ble_transmit();
+					LC_FREQCHANGE(app_vars.tx_coarse, tx_mid, tx_fine);
+					printf("Transmitting on %u %u %u\n", app_vars.tx_coarse, tx_mid, tx_fine);
+					for(times = 0; times <10; ++times){
+						// Wait for frequency to settle.
+						for (t = 0; t < 5000; ++t);
+						ble_transmit();
+					}
 			}
 		}
 #else
