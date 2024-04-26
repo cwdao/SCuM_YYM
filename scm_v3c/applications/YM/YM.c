@@ -23,11 +23,16 @@
 
 #define NUMPKT_PER_CFG      10
 #define STEPS_PER_CONFIG    32
-#define TIMER_PERIOD        2000  // 500 = 1ms@500kHz
+#define TIMER_PERIOD        500  // 500 = 1ms@500kHz
+
+#define setPerGroup 				32
+#define setPerGroup2				32*32
 
 // only this coarse settings are swept, 
 // channel 37 and 0 are known within the setting scope of coarse=24
 #define CFG_COARSE          23
+
+#define NUM_SAMPLES         10
 
 #define HS_3
 
@@ -65,17 +70,29 @@ const static uint8_t ble_uuid[16]       = {
 //=========================== variables =======================================
 
 typedef struct {
-    uint8_t         tx_coarse;
-    uint8_t         tx_mid;
-    uint8_t         tx_fine;
+								uint8_t         tx_coarse;
+								uint8_t         tx_mid;
+								uint8_t         tx_fine;
+								//record the cb_timer num to compensite 4ms for ble transmitte
+								uint8_t					cb_timer_num;
+		volatile    uint8_t         sample_index;
+                uint32_t        samples[NUM_SAMPLES];
     
-    bool            sendDone;
-    
-    uint8_t         pdu[PDU_LENGTH+CRC_LENGTH]; // protocol data unit
-    uint8_t         pdu_len;
+								bool            sendDone;
+								
+								uint8_t         pdu[PDU_LENGTH+CRC_LENGTH]; // protocol data unit
+								uint8_t         pdu_len;
+							
+								uint32_t 				avg_sample;
+								uint32_t 				count_2M;
+								uint32_t 				count_LC;
+								uint32_t 				count_adc;
+								bool 						freq_setFinish_flag;
+								uint8_t 				freq_setTimes_flag;
 } app_vars_t;
 
 app_vars_t app_vars;
+
 
 //=========================== prototypes ======================================
 
@@ -88,6 +105,7 @@ uint8_t prepare_pdu_cte_inline(void);
 uint8_t prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine);
 void    delay_tx(void);
 void    delay_lc_setup(void);
+uint16_t course_estimate(void);
 
 //=========================== main ============================================
 
@@ -174,49 +192,54 @@ int main(void) {
     
     ble_set_channel(CHANNEL);
 		
-		//test frame in Nordic
-		ble_gen_packet();
-    
+//		//test frame in Nordic
+//		ble_gen_packet();
+		radio_txEnable();
+		course_estimate();
+    rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
     while (1) {
         
-        // loop through all configuration
-        
-        // customize coarse, mid, fine values to change the sweeping range
-        for (cfg_mid=MID_START;cfg_mid<MID_END;cfg_mid++) {
-            for (cfg_fine=0;cfg_fine<32;cfg_fine+=1) {
-                
-                printf(
-                    "coarse=%d, middle=%d, fine=%d\r\n", 
-                    CFG_COARSE,cfg_mid,cfg_fine
-                );
-                
-                for (i=0;i<NUMPKT_PER_CFG;i++) {
-                    
-                    radio_rfOff();
-                    
-//                    app_vars.pdu_len = prepare_freq_setting_pdu(CFG_COARSE, cfg_mid, cfg_fine);
-//                    ble_prepare_packt(&app_vars.pdu[0], app_vars.pdu_len);
-                    
-                    LC_FREQCHANGE(CFG_COARSE, cfg_mid, cfg_fine);
-                    
-                    delay_lc_setup();
-                    
-                    ble_load_tx_arb_fifo();
-                    radio_txEnable();
-                    
-                    delay_tx();
-                    
-                    ble_txNow_tx_arb_fifo();
-                    
-                    // need to make sure the tx is done before 
-                    // starting a new transmission
-                    
-                    rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-                    app_vars.sendDone = false;
-                    while (app_vars.sendDone==false);
-                }
-            }
-        }
+//        // loop through all configuration
+//        
+//        // customize coarse, mid, fine values to change the sweeping range
+//        for (cfg_mid=MID_START;cfg_mid<MID_END;cfg_mid++) {
+//            for (cfg_fine=0;cfg_fine<32;cfg_fine+=1) {
+//                
+////                printf(
+////                    "coarse=%d, middle=%d, fine=%d\r\n", 
+////                    CFG_COARSE,cfg_mid,cfg_fine
+////                );
+//								printf("%d,%d,%d\r\n", CFG_COARSE,cfg_mid,cfg_fine);
+//                
+//                for (i=0;i<NUMPKT_PER_CFG;i++) {
+//                    
+//                    radio_rfOff();
+//                    
+////                    app_vars.pdu_len = prepare_freq_setting_pdu(CFG_COARSE, cfg_mid, cfg_fine);
+////                    ble_prepare_packt(&app_vars.pdu[0], app_vars.pdu_len);
+//                    
+//                    LC_FREQCHANGE(CFG_COARSE, cfg_mid, cfg_fine);
+//                    
+//                    delay_lc_setup();
+//                    
+//                    ble_load_tx_arb_fifo();
+//                    radio_txEnable();
+//                    
+//                    delay_tx();
+//                    
+//                    ble_txNow_tx_arb_fifo();
+//                    
+//                    // need to make sure the tx is done before 
+//                    // starting a new transmission
+//                    
+//                    rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+//                    app_vars.sendDone = false;
+//                    while (app_vars.sendDone==false);
+//                }
+//            }
+//        }
+//				course_estimate();
+
     }
 }
 
@@ -225,10 +248,44 @@ int main(void) {
 //=========================== private =========================================
 
 //==== callback
+uint32_t     average_sample(void){
+    uint8_t i;
+    uint32_t avg;
+    
+    avg = 0;
+    for (i=0;i<NUM_SAMPLES;i++) {
+        avg += app_vars.samples[i];
+    }
+    avg = avg/NUM_SAMPLES;
+    return avg;
+}
 
 void cb_timer(void) {
-    app_vars.sendDone = true;
+//		app_vars.cb_timer_num ++;
+//		if(app_vars.cb_timer_num==4){
+//			app_vars.sendDone = true;
+//			app_vars.cb_timer_num = 0;
+//		}
+//		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+//			printf("yes!");
 
+
+		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+    read_counters_3B(&app_vars.count_2M,&app_vars.count_LC,&app_vars.count_adc);
+    app_vars.samples[app_vars.sample_index] = app_vars.count_LC;
+    app_vars.sample_index++;
+    if (app_vars.sample_index==NUM_SAMPLES) {
+        app_vars.sample_index = 0;
+        app_vars.avg_sample = average_sample();
+//			printf("%d \r\n",app_vars.avg_sample);
+			
+			if(app_vars.freq_setFinish_flag == 0 && app_vars.freq_setTimes_flag == 5){
+				app_vars.freq_setFinish_flag = 1;
+				app_vars.freq_setTimes_flag = 0;
+			}
+			app_vars.freq_setTimes_flag++;
+		}
+		
 }
 
 void    cb_endFrame_tx(uint32_t timestamp){
@@ -236,6 +293,7 @@ void    cb_endFrame_tx(uint32_t timestamp){
     printf("this is end of tx \r\n");
 	
 }
+
 
 //==== delay
 
@@ -252,6 +310,67 @@ void delay_tx(void) {
 void delay_lc_setup(void) {
     uint16_t i;
     for (i=0;i<LC_SETUP_DELAY;i++);
+}
+
+//regression
+uint16_t course_estimate(void){
+//		printf("yes!");
+//		radio_txEnable();
+//		LC_FREQCHANGE(1,31,31);
+//		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+//    read_counters_3B(&app_vars.count_2M,&app_vars.count_LC,&app_vars.count_adc);
+//    app_vars.samples[app_vars.sample_index] = app_vars.count_LC;
+//    app_vars.sample_index++;
+//    if (app_vars.sample_index==NUM_SAMPLES) {
+//        app_vars.sample_index = 0;
+//        app_vars.avg_sample = average_sample();
+//			printf("%d \r\n",app_vars.avg_sample);
+//		}
+	
+		uint16_t p1L_count, p1R_count, p2L_count, p2R_count, p3L_count, p3R_count;
+		uint16_t p1x, p1y, p2x, p2y, p3x, p3y;
+	
+		LC_FREQCHANGE(1,31,31);
+		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+		while(app_vars.freq_setFinish_flag == 0);
+		p1L_count = app_vars.avg_sample;
+		printf("p1L_count=%d\r\n",p1L_count);
+	
+		LC_FREQCHANGE(2,0,0);
+		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+		app_vars.freq_setFinish_flag = 0;
+		while(app_vars.freq_setFinish_flag == 0);
+		p1R_count = app_vars.avg_sample;
+		printf("p1R_count=%d\r\n",p1R_count);
+		
+		LC_FREQCHANGE(15,31,31);
+		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+		app_vars.freq_setFinish_flag = 0;
+		while(app_vars.freq_setFinish_flag == 0);
+		p2L_count = app_vars.avg_sample;
+		printf("p2L_count=%d\r\n",p2L_count);
+		
+		LC_FREQCHANGE(16,0,0);
+		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+		app_vars.freq_setFinish_flag = 0;
+		while(app_vars.freq_setFinish_flag == 0);
+		p2R_count = app_vars.avg_sample;
+		printf("p2R_count=%d\r\n",p2R_count);
+	 
+		LC_FREQCHANGE(30,31,31);
+		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+		app_vars.freq_setFinish_flag = 0;
+		while(app_vars.freq_setFinish_flag == 0);
+		p3L_count = app_vars.avg_sample;
+		printf("p3L_count=%d\r\n",p3L_count);
+		
+		LC_FREQCHANGE(31,0,0);
+		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+		app_vars.freq_setFinish_flag = 0;
+		while(app_vars.freq_setFinish_flag == 0);
+		p3R_count = app_vars.avg_sample;
+		printf("p3R_count=%d\r\n",p3R_count);
+	
 }
 
 //==== pdu related
