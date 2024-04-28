@@ -4,6 +4,7 @@
 */
 
 #include <string.h>
+#include <math.h>
 
 #include "scm3c_hw_interface.h"
 #include "memory_map.h"
@@ -25,8 +26,10 @@
 #define STEPS_PER_CONFIG    32
 #define TIMER_PERIOD        500  // 500 = 1ms@500kHz
 
-#define setPerGroup 				32
-#define setPerGroup2				32*32
+#define setPerGroup 		32
+#define setPerGroup2		32*32
+
+#define Freq_target         2502
 
 // only this coarse settings are swept, 
 // channel 37 and 0 are known within the setting scope of coarse=24
@@ -36,59 +39,64 @@
 
 #define HS_3
 
+//the number of the matrix of x
+#define N                   2
+
 #ifdef TEST
-    #define MID_START   0
-    #define MID_END     32
+    #define MID_START       0
+    #define MID_END         32
 #endif
 
 #ifdef HS_2
-    #define MID_START   15
-    #define MID_END     20
+    #define MID_START       15
+    #define MID_END         20
 #endif
 
 #ifdef HS_1
-    #define MID_START   0
-    #define MID_END     32
+    #define MID_START       0
+    #define MID_END         32
 #endif
 
 #ifdef HS_3
-    #define MID_START   18
-    #define MID_END     31
+    #define MID_START       18
+    #define MID_END         31
 #endif
 
 
-const static uint8_t ble_device_addr[6] = {
-    0xaa, 0xbb, 0xcc, 0xcc, 0xbb, 0xaa
-};
+// const static uint8_t ble_device_addr[6] = {
+//     0xaa, 0xbb, 0xcc, 0xcc, 0xbb, 0xaa
+// };
 
-const static uint8_t ble_uuid[16]       = {
+// const static uint8_t ble_uuid[16]       = {
 
-    0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf,
-    0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf
-};
+//     0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf,
+//     0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf
+// };
 
 //=========================== variables =======================================
 
 typedef struct {
-								uint8_t         tx_coarse;
-								uint8_t         tx_mid;
-								uint8_t         tx_fine;
-								//record the cb_timer num to compensite 4ms for ble transmitte
-								uint8_t					cb_timer_num;
-		volatile    uint8_t         sample_index;
-                uint32_t        samples[NUM_SAMPLES];
-    
-								bool            sendDone;
-								
-								uint8_t         pdu[PDU_LENGTH+CRC_LENGTH]; // protocol data unit
-								uint8_t         pdu_len;
-							
-								uint32_t 				avg_sample;
-								uint32_t 				count_2M;
-								uint32_t 				count_LC;
-								uint32_t 				count_adc;
-								bool 						freq_setFinish_flag;
-								uint8_t 				freq_setTimes_flag;
+                    uint8_t         tx_coarse;
+                    uint8_t         tx_mid;
+                    uint8_t         tx_fine;
+                    //record the cb_timer num to compensite 4ms for ble transmitte
+                    uint8_t					cb_timer_num;
+        volatile    uint8_t         sample_index;
+                    uint32_t        samples[NUM_SAMPLES];
+
+                    bool            sendDone;
+                    
+                    uint8_t         pdu[PDU_LENGTH+CRC_LENGTH]; // protocol data unit
+                    uint8_t         pdu_len;
+                
+                    uint32_t 				avg_sample;
+                    uint32_t 				count_2M;
+                    uint32_t 				count_LC;
+                    uint32_t 				count_adc;
+                    bool 				    freq_setFinish_flag;
+                    uint8_t 				freq_setTimes_flag;
+                    bool                    calculate_flag;
+                    uint16_t 				calculate_times_flag;
 } app_vars_t;
 
 app_vars_t app_vars;
@@ -96,16 +104,15 @@ app_vars_t app_vars;
 
 //=========================== prototypes ======================================
 
-void    cb_endFrame_tx(uint32_t timestamp);
-void    cb_timer(void);
+void        cb_endFrame_tx(uint32_t timestamp);
+void        cb_timer(void);
 
-uint8_t prepare_pdu_nordic_aoa_beacon(void);
-uint8_t prepare_pdu_ibeacon(void);
-uint8_t prepare_pdu_cte_inline(void);
-uint8_t prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine);
-void    delay_tx(void);
-void    delay_lc_setup(void);
-uint16_t course_estimate(void);
+void        delay_tx(void);
+void        delay_lc_setup(void);
+void        course_estimate(void);
+void        Gaussian_elimination(int x_matrix_raw[2][2], double x_matrix_inverse[2][2]);
+void        matrixMultiplication(double x_matrix_inverse[][2], int y_matrix[][1], double para_matrix[][1]);
+void        Solve_Equation(double para_matrix[][1], double Inv_equ_c, double x_matrix_inverse[][2]);
 
 //=========================== main ============================================
 
@@ -113,14 +120,14 @@ int main(void) {
 
     uint32_t calc_crc;
 
-    uint8_t cfg_mid;
-    uint8_t cfg_fine;
+    // uint8_t cfg_mid;
+    // uint8_t cfg_fine;
     
-    uint8_t i;
-    uint8_t j;
-    uint8_t offset;
+    // uint8_t i;
+    // uint8_t j;
+    // uint8_t offset;
     
-    uint32_t t;
+    // uint32_t t;
 
     memset(&app_vars, 0, sizeof(app_vars_t));
 
@@ -164,18 +171,18 @@ int main(void) {
     // Turn off polyphase and disable mixer
     ANALOG_CFG_REG__16 = 0x6;
 
-#if CHANNEL==37
-    // For TX, LC target freq = 2.402G - 0.25M = 2.40175 GHz.
-    optical_setLCTarget(250182);
-#elif CHANNEL==0
+// #if CHANNEL==37
+//     // For TX, LC target freq = 2.402G - 0.25M = 2.40175 GHz.
+//     optical_setLCTarget(250182);
+// #elif CHANNEL==0
     
-    // For TX, LC target freq = 2.404G - 0.25M = 2.40375 GHz.
-    optical_setLCTarget(250390);
-#endif
+//     // For TX, LC target freq = 2.404G - 0.25M = 2.40375 GHz.
+//     optical_setLCTarget(250390);
+// #endif
 
-    // For the LO, calibration for RX channel 11, so turn on AUX, IF, and LO LDOs
-    // by calling radio rxEnable
-    radio_rxEnable();
+    // // For the LO, calibration for RX channel 11, so turn on AUX, IF, and LO LDOs
+    // // by calling radio rxEnable
+    // radio_rxEnable();
 
     // Enable optical SFD interrupt for optical calibration
     optical_enable();
@@ -194,9 +201,9 @@ int main(void) {
 		
 //		//test frame in Nordic
 //		ble_gen_packet();
-		radio_txEnable();
-		course_estimate();
-    rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+	radio_txEnable();
+	course_estimate();
+
     while (1) {
         
 //        // loop through all configuration
@@ -270,7 +277,7 @@ void cb_timer(void) {
 //			printf("yes!");
 
 
-		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+	rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
     read_counters_3B(&app_vars.count_2M,&app_vars.count_LC,&app_vars.count_adc);
     app_vars.samples[app_vars.sample_index] = app_vars.count_LC;
     app_vars.sample_index++;
@@ -279,13 +286,22 @@ void cb_timer(void) {
         app_vars.avg_sample = average_sample();
 //			printf("%d \r\n",app_vars.avg_sample);
 			
-			if(app_vars.freq_setFinish_flag == 0 && app_vars.freq_setTimes_flag == 5){
-				app_vars.freq_setFinish_flag = 1;
-				app_vars.freq_setTimes_flag = 0;
-			}
-			app_vars.freq_setTimes_flag++;
-		}
-		
+        if(app_vars.freq_setFinish_flag == 0 && app_vars.freq_setTimes_flag == 5){
+            app_vars.freq_setFinish_flag = 1;
+            app_vars.freq_setTimes_flag = 0;
+        }
+        app_vars.freq_setTimes_flag++;
+    }
+    if (app_vars.calculate_flag == 1)
+    {
+        app_vars.calculate_times_flag++;
+        if (app_vars.calculate_times_flag==30)
+        {
+            app_vars.calculate_times_flag=0;
+            app_vars.calculate_flag = 0;
+        }
+        
+    }
 }
 
 void    cb_endFrame_tx(uint32_t timestamp){
@@ -313,197 +329,309 @@ void delay_lc_setup(void) {
 }
 
 //regression
-uint16_t course_estimate(void){
-//		printf("yes!");
-//		radio_txEnable();
-//		LC_FREQCHANGE(1,31,31);
-//		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-//    read_counters_3B(&app_vars.count_2M,&app_vars.count_LC,&app_vars.count_adc);
-//    app_vars.samples[app_vars.sample_index] = app_vars.count_LC;
-//    app_vars.sample_index++;
-//    if (app_vars.sample_index==NUM_SAMPLES) {
-//        app_vars.sample_index = 0;
-//        app_vars.avg_sample = average_sample();
-//			printf("%d \r\n",app_vars.avg_sample);
-//		}
-	
-		uint16_t p1L_count, p1R_count, p2L_count, p2R_count, p3L_count, p3R_count;
-		uint16_t p1x, p1y, p2x, p2y, p3x, p3y;
-	
-		LC_FREQCHANGE(1,31,31);
-		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-		while(app_vars.freq_setFinish_flag == 0);
-		p1L_count = app_vars.avg_sample;
-		printf("p1L_count=%d\r\n",p1L_count);
-	
-		LC_FREQCHANGE(2,0,0);
-		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-		app_vars.freq_setFinish_flag = 0;
-		while(app_vars.freq_setFinish_flag == 0);
-		p1R_count = app_vars.avg_sample;
-		printf("p1R_count=%d\r\n",p1R_count);
-		
-		LC_FREQCHANGE(15,31,31);
-		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-		app_vars.freq_setFinish_flag = 0;
-		while(app_vars.freq_setFinish_flag == 0);
-		p2L_count = app_vars.avg_sample;
-		printf("p2L_count=%d\r\n",p2L_count);
-		
-		LC_FREQCHANGE(16,0,0);
-		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-		app_vars.freq_setFinish_flag = 0;
-		while(app_vars.freq_setFinish_flag == 0);
-		p2R_count = app_vars.avg_sample;
-		printf("p2R_count=%d\r\n",p2R_count);
-	 
-		LC_FREQCHANGE(30,31,31);
-		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-		app_vars.freq_setFinish_flag = 0;
-		while(app_vars.freq_setFinish_flag == 0);
-		p3L_count = app_vars.avg_sample;
-		printf("p3L_count=%d\r\n",p3L_count);
-		
-		LC_FREQCHANGE(31,0,0);
-		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-		app_vars.freq_setFinish_flag = 0;
-		while(app_vars.freq_setFinish_flag == 0);
-		p3R_count = app_vars.avg_sample;
-		printf("p3R_count=%d\r\n",p3R_count);
-	
+void course_estimate(void){
+    //用无符号数总会出现奇怪的问题
+    int p1L_count, p1R_count, p2L_count, p2R_count, p3L_count, p3R_count;
+    int p1x, p1y, p2x, p2y, p3x, p3y;
+    int x_matrix[2][2];
+    int y_matrix[2][1];
+    double x_matrix_inverse[2][2];
+    double para_matrix[2][1];
+    // double matrix_a, matrix_b, matrix_c, matrix_d;
+    double determinant;
+    double Inv_equ_c;
+    // double test1, test2, test3;
+
+    LC_FREQCHANGE(1,31,31);
+    rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+    while(app_vars.freq_setFinish_flag == 0);
+    p1L_count = app_vars.avg_sample;
+    while (p1L_count <=1000)       
+    {
+        rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+        while(app_vars.freq_setFinish_flag == 0);
+        printf("cal error, waiting..");
+        p1L_count = app_vars.avg_sample;
+        exit();
+    }
+    
+    // printf("p1L_count=%d\r\n",p1L_count);
+
+    LC_FREQCHANGE(2,0,0);
+    rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+    app_vars.freq_setFinish_flag = 0;
+    while(app_vars.freq_setFinish_flag == 0);
+    p1R_count = app_vars.avg_sample;
+    // printf("p1R_count=%d\r\n",p1R_count);
+    
+    LC_FREQCHANGE(15,31,31);
+    rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+    app_vars.freq_setFinish_flag = 0;
+    while(app_vars.freq_setFinish_flag == 0);
+    p2L_count = app_vars.avg_sample;
+    // printf("p2L_count=%d\r\n",p2L_count);
+    
+    LC_FREQCHANGE(16,0,0);
+    rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+    app_vars.freq_setFinish_flag = 0;
+    while(app_vars.freq_setFinish_flag == 0);
+    p2R_count = app_vars.avg_sample;
+    // printf("p2R_count=%d\r\n",p2R_count);
+    
+    LC_FREQCHANGE(30,31,31);
+    rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+    app_vars.freq_setFinish_flag = 0;
+    while(app_vars.freq_setFinish_flag == 0);
+    p3L_count = app_vars.avg_sample;
+    // printf("p3L_count=%d\r\n",p3L_count);
+    
+    LC_FREQCHANGE(31,0,0);
+    rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+    app_vars.freq_setFinish_flag = 0;
+    while(app_vars.freq_setFinish_flag == 0);
+    p3R_count = app_vars.avg_sample;
+    // printf("p3R_count=%d\r\n",p3R_count);
+
+    p1y = (p1L_count + p1R_count)/2;
+    p2y = (p2L_count + p2R_count)/2;
+    p3y = (p3L_count + p3R_count)/2;
+    p1x = 2;
+    p2x = 16;
+    p3x = 31;
+    // printf("p1y=%d, p2y=%d, p3y=%d, p1x=%d, p2x=%d, p3x=%d\r\n",p1y,p2y,p3y,p1x,p2x,p3x);
+
+    // 修改 x_matrix
+    x_matrix[0][0] = ((p2x * p2x) - (p1x * p1x));
+    x_matrix[0][1] = (p2x - p1x);
+    x_matrix[1][0] = ((p3x * p3x) - (p1x * p1x));
+    x_matrix[1][1] = (p3x - p1x);
+    // printf("xmatrix = %d,%d,%d,%d\r\n", x_matrix[0][0], x_matrix[0][1], x_matrix[1][0], x_matrix[1][1]);
+    //0427 浮点运算算力太差，且使用标号为x会导致结果太大
+    //能用整数尽可能用整数
+    //尝试直接以x=2, x=16, x=31进行计算
+    //反解出来只需要和.5比较就可以
+
+    //0428 部分板子存在course code小的时候LC不准确的情况
+    //尝试使用更大的course code来实现拟合
+
+    // 修改 y_matrix
+    y_matrix[0][0] = p2y - p1y;
+    y_matrix[1][0] = p3y - p1y;
+    printf("y_matrix = %d,%d\r\n", y_matrix[0][0], y_matrix[1][0]);
+    // printf("xmatrix = %d,%d,%d,%d\r\n", x_matrix[0][0], x_matrix[0][1], x_matrix[1][0], x_matrix[1][1]);
+    Gaussian_elimination(x_matrix, x_matrix_inverse);
+    matrixMultiplication(x_matrix_inverse, y_matrix, para_matrix);
+    printf("para_matrix = %f,%f\r\n", para_matrix[0][0], para_matrix[1][0]);
+    //x_matrix_inverse不再使用，帮助计算存储中间值
+    x_matrix_inverse[0][0] = para_matrix[0][0] * (p2x *p2x);
+    x_matrix_inverse[0][1] = para_matrix[1][0] * p2x;
+    x_matrix_inverse[1][0] = x_matrix_inverse[0][0] + x_matrix_inverse[0][1];
+    Inv_equ_c = p2y - x_matrix_inverse[1][0];
+    printf("Inv_equ_c=%f\r\n",Inv_equ_c);
+    Solve_Equation(para_matrix, Inv_equ_c,x_matrix_inverse);
+    //开始分区，p1L_count, p1R_count, p2L_count, p2R_count, p3L_count, p3R_count释放，帮助计算
+    if ((int)x_matrix_inverse[0][0]%10 <=5)
+    {
+        p1R_count = (int)x_matrix_inverse[1][0];
+        printf("p1r=%d\r\n",p1R_count);
+        p1L_count = p1R_count - 1;
+        LC_FREQCHANGE(p1L_count,16,0);
+        rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+        app_vars.freq_setFinish_flag = 0;
+        while(app_vars.freq_setFinish_flag == 0);
+        p1x = app_vars.avg_sample;
+
+        LC_FREQCHANGE(p1L_count,31,31);
+        rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+        app_vars.freq_setFinish_flag = 0;
+        while(app_vars.freq_setFinish_flag == 0);
+        p1y = app_vars.avg_sample;
+
+        LC_FREQCHANGE(p1R_count,16,0);
+        rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+        app_vars.freq_setFinish_flag = 0;
+        while(app_vars.freq_setFinish_flag == 0);
+        p2x = app_vars.avg_sample;
+
+        LC_FREQCHANGE(p1R_count,31,31);
+        rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+        app_vars.freq_setFinish_flag = 0;
+        while(app_vars.freq_setFinish_flag == 0);
+        p2y = app_vars.avg_sample;
+    }
+    else if ((int)x_matrix_inverse[0][0]%10 >5)
+    {
+        p1L_count = (int)x_matrix_inverse[1][0];
+        printf("p1r=%d\r\n",p1R_count);
+        p1R_count = p1L_count + 1;
+        LC_FREQCHANGE(p1L_count,16,0);
+        rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+        app_vars.freq_setFinish_flag = 0;
+        while(app_vars.freq_setFinish_flag == 0);
+        p1x = app_vars.avg_sample;
+
+        LC_FREQCHANGE(p1L_count,31,31);
+        rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+        app_vars.freq_setFinish_flag = 0;
+        while(app_vars.freq_setFinish_flag == 0);
+        p1y = app_vars.avg_sample;
+
+        LC_FREQCHANGE(p1R_count,16,0);
+        rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+        app_vars.freq_setFinish_flag = 0;
+        while(app_vars.freq_setFinish_flag == 0);
+        p2x = app_vars.avg_sample;
+
+        LC_FREQCHANGE(p1R_count,31,31);
+        rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+        app_vars.freq_setFinish_flag = 0;
+        while(app_vars.freq_setFinish_flag == 0);
+        p2y = app_vars.avg_sample;
+    }
+    //存在隐藏问题，如果比两个都小，待修正
+    while ((Freq_target > p1y && Freq_target > p2y)||(Freq_target < p1x && Freq_target < p2x))
+    {
+        /* code */
+        x_matrix_inverse[1][0] = x_matrix_inverse[1][0] + 1;
+        if ((int)x_matrix_inverse[0][0]%10 <=5)
+        {
+            p1R_count = (int)x_matrix_inverse[1][0];
+            printf("p1r=%d\r\n",p1R_count);
+            p1L_count = p1R_count - 1;
+            LC_FREQCHANGE(p1L_count,16,0);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p1x = app_vars.avg_sample;
+
+            LC_FREQCHANGE(p1L_count,31,31);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p1y = app_vars.avg_sample;
+
+            LC_FREQCHANGE(p1R_count,16,0);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p2x = app_vars.avg_sample;
+
+            LC_FREQCHANGE(p1R_count,31,31);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p2y = app_vars.avg_sample;
+        }
+        else if ((int)x_matrix_inverse[0][0]%10 >5)
+        {
+            p1L_count = (int)x_matrix_inverse[1][0];
+            printf("p1r=%d\r\n",p1R_count);
+            p1R_count = p1L_count + 1;
+            LC_FREQCHANGE(p1L_count,16,0);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p1x = app_vars.avg_sample;
+
+            LC_FREQCHANGE(p1L_count,31,31);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p1y = app_vars.avg_sample;
+
+            LC_FREQCHANGE(p1R_count,16,0);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p2x = app_vars.avg_sample;
+
+            LC_FREQCHANGE(p1R_count,31,31);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p2y = app_vars.avg_sample;
+        }
+        printf("p1x=%d, p1y=%d, p2x=%d, p2y=%d\r\n",p1x, p1y, p2x, p2y);
+    }
+    
+    //打印获取的数据
+    printf("p1x=%d, p1y=%d, p2x=%d, p2y=%d\r\n",p1x, p1y, p2x, p2y);
+    //都围绕在course的半区内，p1区使用16-32，p2区使用0-16
+    // p1区
+    p2L_count = p1y - p1x;
+    p2R_count = 32 - 16;
+    x_matrix_inverse[0][0] = (double)p2L_count/p2R_count; //k
+    x_matrix_inverse[0][1] = x_matrix_inverse[0][0]*16; //k*x
+    x_matrix_inverse[1][0] = p1x - x_matrix_inverse[0][1]; //b=y-k*x
+    x_matrix_inverse[0][1] = Freq_target - x_matrix_inverse[1][0]; //y-b
+    para_matrix[0][0] = x_matrix_inverse[0][1]/x_matrix_inverse[0][0]; //p1 set = (y-b)/k
+    printf("p1_para = %f,%f,%f\r\n", x_matrix_inverse[0][0], x_matrix_inverse[1][0], para_matrix[0][0]);
+    // p2区
+    p3L_count = p2y - p2x;
+    p3R_count = 16 - 0;
+    x_matrix_inverse[0][0] = (double)p3L_count/p3R_count; //k
+    x_matrix_inverse[0][1] = x_matrix_inverse[0][0]*16; //k*x
+    x_matrix_inverse[1][0] = p2y - x_matrix_inverse[0][1];// b = y-kx
+    x_matrix_inverse[0][1] = Freq_target - x_matrix_inverse[1][0]; //y-b
+    para_matrix[1][0] = x_matrix_inverse[0][1]/x_matrix_inverse[0][0]; //p2 set = (y-b)/k
+    printf("p2_para = %f,%f,%f\r\n", x_matrix_inverse[0][0], x_matrix_inverse[1][0], para_matrix[1][0]);
+    //下面需要验证是否在该范围中
+    //可能遇到的问题是LC_count与发射频率的误差
 }
 
+//使用高斯消元法对矩阵进行求逆
+void Gaussian_elimination(int x_matrix_raw[2][2], double x_matrix_inverse[2][2]) {
+    // 计算矩阵的行列式
+    double determinant;
+
+    determinant = x_matrix_raw[0][0] * x_matrix_raw[1][1] - x_matrix_raw[0][1] * x_matrix_raw[1][0];
+    // printf("determinant=%f\r\n",determinant);
+    
+    // 检查行列式是否为0，若为0则矩阵不可逆
+    if (determinant == 0) {
+        printf("Matrix is not invertible.\n");
+        return;
+    }
+
+    // 计算逆矩阵的每个元素
+    x_matrix_inverse[0][0] = x_matrix_raw[1][1] / determinant;
+    x_matrix_inverse[0][1] = -x_matrix_raw[0][1] / determinant;
+    x_matrix_inverse[1][0] = -x_matrix_raw[1][0] / determinant;
+    x_matrix_inverse[1][1] = x_matrix_raw[0][0] / determinant;
+    app_vars.calculate_flag = 1;
+    while(app_vars.calculate_flag == 1){
+    }; 
+    printf("xmatrix_inv = %f,%f,%f,%f\r\n", x_matrix_inverse[0][0], x_matrix_inverse[0][1], x_matrix_inverse[1][0], x_matrix_inverse[1][1]);
+}
+
+void matrixMultiplication(double x_matrix_inverse[][2], int y_matrix[][1], double para_matrix[][1]) {
+    int i, j, k;
+    
+    for (i = 0; i < 2; i++) {
+        for (j = 0; j < 1; j++) {
+            para_matrix[i][j] = 0;
+            for (k = 0; k < 2; k++) {
+                para_matrix[i][j] += x_matrix_inverse[i][k] * y_matrix[k][j];
+            }
+        }
+    }
+}
+
+void Solve_Equation(double para_matrix[][1], double Inv_equ_c, double x_matrix_inverse[][2]) {
+    Inv_equ_c = Inv_equ_c - 2502;
+    //同样使用x_matrix_inverse帮助计算存储中间值，以减少内存
+    x_matrix_inverse[0][0] = para_matrix[1][0]*para_matrix[1][0];
+    x_matrix_inverse[0][1] = 4 * para_matrix[0][0]*Inv_equ_c;
+    x_matrix_inverse[1][0] = x_matrix_inverse[0][0] - x_matrix_inverse[0][1];
+    x_matrix_inverse[1][1] = sqrt(x_matrix_inverse[1][0]);
+
+    //x_matrix_inverse[0][0],[0][1],[1][0]重新释放 
+    x_matrix_inverse[0][0] = 2*para_matrix[0][0];
+    x_matrix_inverse[0][1] = 1/x_matrix_inverse[0][0];
+    x_matrix_inverse[1][0] = x_matrix_inverse[0][1] * (-para_matrix[1][0]+x_matrix_inverse[1][1]);
+    //只需要x大于0的根
+    //在此处直接乘10，看除10的余数大于5还是小于5
+    x_matrix_inverse[0][0] = x_matrix_inverse[1][0] * 10;
+    printf("solve = %f\r\n", x_matrix_inverse[1][0]);
+}
 //==== pdu related
-
-uint8_t prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine) {
-    
-    uint8_t i;
-    uint8_t j;
-    
-    uint8_t field_len;
-    
-    memset(app_vars.pdu, 0, sizeof(app_vars.pdu));
-    
-    // adv head (to be explained)
-    i = 0;
-    field_len = 0;
-    
-    app_vars.pdu[i++] = flipChar(0x20);
-    app_vars.pdu[i++] = flipChar(0x03);
-//		app_vars.pdu[i++] = 0x20;
-//    app_vars.pdu[i++] = 0x03;
-	
-    app_vars.pdu[i++] = flipChar(coarse);
-    app_vars.pdu[i++] = flipChar(mid);
-    app_vars.pdu[i++] = flipChar(fine);
-//		app_vars.pdu[i++] = flipChar(0xAB);
-//    app_vars.pdu[i++] = flipChar(0xAB);
-//    app_vars.pdu[i++] = flipChar(0xAB);
-    
-    field_len += 5;
-    
-    return field_len;
-}
-
-uint8_t prepare_pdu_cte_inline(void) {
-    
-    uint8_t i;
-    uint8_t j;
-    
-    uint8_t field_len;
-    
-    memset(app_vars.pdu, 0, sizeof(app_vars.pdu));
-    
-    // adv head (to be explained)
-    i = 0;
-    field_len = 0;
-    
-    app_vars.pdu[i++] = flipChar(0x20);
-    app_vars.pdu[i++] = flipChar(0x02);
-    
-    app_vars.pdu[i++] = flipChar(0x03);
-    app_vars.pdu[i++] = flipChar(0xdd);
-    app_vars.pdu[i++] = flipChar(0xff);
-    
-    field_len += 3;
-    
-    // the pdu length = field_len plus 2 bytes header
-    return (field_len+2);
-}
-
-uint8_t prepare_pdu_ibeacon(void) {
-    
-    uint8_t i;
-    uint8_t j;
-    
-    uint8_t field_len;
-    
-    memset(app_vars.pdu, 0, sizeof(app_vars.pdu));
-    
-    // adv head (to be explained)
-    i = 0;
-    field_len = 0;
-    
-    app_vars.pdu[i++] = flipChar(0x42);
-    i++;    // skip the length field, fill it at last
-    
-    // adv address
-    
-    for (j=6; j>0; j--) {
-        app_vars.pdu[i++] = flipChar(ble_device_addr[j-1]);
-    }
-    
-    field_len += 6;    
-    
-    app_vars.pdu[i++] = flipChar(0x1a);
-    app_vars.pdu[i++] = flipChar(0xff);
-    app_vars.pdu[i++] = flipChar(0x4c);
-    app_vars.pdu[i++] = flipChar(0x00);
-    
-    field_len += 4;
-    
-    app_vars.pdu[i++] = flipChar(0x02);
-    app_vars.pdu[i++] = flipChar(0x15);
-    for (j=16; j>0; j--) {
-        app_vars.pdu[i++] = flipChar(ble_uuid[j-1]);
-    }
-    
-    // major
-    app_vars.pdu[i++] = flipChar(0x00);
-    app_vars.pdu[i++] = flipChar(0xff);
-    // minor
-    app_vars.pdu[i++] = flipChar(0x00);
-    app_vars.pdu[i++] = flipChar(0x0f);
-    // power level
-    app_vars.pdu[i++] = flipChar(TXPOWER);
-    
-    field_len += 23;
-    
-    app_vars.pdu[1] = flipChar(field_len);
-    
-    // the pdu length = field_len plus 2 bytes header
-    return (field_len+2);
-}
-
-uint8_t prepare_pdu_nordic_aoa_beacon(void){
-
-    uint8_t i;
-    uint8_t field_len;
-    
-    memset(app_vars.pdu, 0, sizeof(app_vars.pdu));
-    
-    i         = 0;
-    
-    app_vars.pdu[i++] = flipChar(0x46);
-    app_vars.pdu[i++] = flipChar(0x06);
-    field_len = 6;
-    app_vars.pdu[i++] = flipChar(0x01);
-    app_vars.pdu[i++] = flipChar(0x02);
-    app_vars.pdu[i++] = flipChar(0x03);
-    app_vars.pdu[i++] = flipChar(0x04);
-    app_vars.pdu[i++] = flipChar(0x05);
-    app_vars.pdu[i++] = flipChar(0xc6);
-    
-    // the pdu length = field_len plus 2 bytes header
-    return (field_len+2);
-}
