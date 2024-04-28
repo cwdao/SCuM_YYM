@@ -27,7 +27,7 @@
 
 // only this coarse settings are swept, 
 // channel 37 and 0 are known within the setting scope of coarse=24
-#define CFG_COARSE          23
+#define CFG_COARSE          21
 
 #define HS_3
 
@@ -47,8 +47,8 @@
 #endif
 
 #ifdef HS_3
-    #define MID_START   18
-    #define MID_END     31
+    #define MID_START   0
+    #define MID_END     32
 #endif
 
 
