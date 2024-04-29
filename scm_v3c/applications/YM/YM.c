@@ -29,8 +29,8 @@
 #define setPerGroup 		32
 #define setPerGroup2		32*32
 
-#define Freq_target         2504
-#define RC_count_target     2000
+#define Freq_target         1.252 //Target/2000
+// #define RC_count_target     2000
 
 // only this coarse settings are swept, 
 // channel 37 and 0 are known within the setting scope of coarse=24
@@ -417,10 +417,10 @@ void course_estimate(void){
     // Comp_coff = Inv_equ_c/ 2000;
 
     //这一步为什么算不出来 直接赋值就可以算出来？
-    app_vars.Comp_coff = (double)2025 / 2000;
+    app_vars.Comp_coff = Freq_target;
     // printf("coff=%f\r\n",app_vars.Comp_coff);
-    app_vars.freq_abs = (int)((double)Freq_target*app_vars.Comp_coff);
-    printf("freq=%d",app_vars.freq_abs);
+    app_vars.freq_abs = (int)(Freq_target*app_vars.RC_count);
+    printf("freq=%d\r\n",app_vars.freq_abs);
 
     p1y = (p1L_count + p1R_count)/2;
     p2y = (p2L_count + p2R_count)/2;
@@ -518,6 +518,7 @@ void course_estimate(void){
         p2y = app_vars.avg_sample;
     }
     //存在隐藏问题，如果比两个都小，待修正
+    //可以优化，如果比其中一个大，顺延到下一个course的下区
     while ((app_vars.freq_abs > p1y && app_vars.freq_abs > p2y)||(app_vars.freq_abs < p1x && app_vars.freq_abs < p2x))
     {
         /* code */
@@ -606,6 +607,33 @@ void course_estimate(void){
     printf("p2_para = %f\r\n", para_matrix[1][0]);
     //下面需要验证是否在该范围中
     //可能遇到的问题是LC_count与发射频率的误差
+
+    //输出结果
+    if ((int)para_matrix[0][0]>=16 && (int)para_matrix[0][0]<=32)
+    {
+        p1x = (int)para_matrix[0][0];
+        x_matrix_inverse[0][1] = para_matrix[0][0] - p1x;
+        p1y = (int)(x_matrix_inverse[0][1]*31);
+    }
+    else
+    {
+        p1x = 0;
+        p1y = 0;
+    }
+    if ((int)para_matrix[1][0]>=0 && (int)para_matrix[1][0]<=16)
+    {
+        p2x = (int)para_matrix[1][0];
+        x_matrix_inverse[1][1] = para_matrix[1][0] - p1x;
+        p2y = (int)(x_matrix_inverse[1][1]*31);
+    }
+    else
+    {
+        p2x = 0;
+        p2y = 0;
+    }
+    printf("set1=%d,%d\r\n",p1x,p1y);
+    printf("set2=%d.%d\r\n",p2x,p2y); 
+    
 }
 
 //使用高斯消元法对矩阵进行求逆

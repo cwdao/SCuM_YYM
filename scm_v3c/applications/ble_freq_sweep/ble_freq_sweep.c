@@ -27,7 +27,7 @@
 
 // only this coarse settings are swept, 
 // channel 37 and 0 are known within the setting scope of coarse=24
-#define CFG_COARSE          21
+#define CFG_COARSE          20
 
 #define HS_3
 
@@ -47,8 +47,8 @@
 #endif
 
 #ifdef HS_3
-    #define MID_START   0
-    #define MID_END     32
+    #define MID_START   24
+    #define MID_END     26
 #endif
 
 
@@ -175,8 +175,8 @@ int main(void) {
     ble_set_channel(CHANNEL);
 		
 		//test frame in Nordic
-		ble_gen_packet();
-    
+//		ble_gen_packet();
+//    
     while (1) {
         
         // loop through all configuration
@@ -194,8 +194,8 @@ int main(void) {
                     
                     radio_rfOff();
                     
-//                    app_vars.pdu_len = prepare_freq_setting_pdu(CFG_COARSE, cfg_mid, cfg_fine);
-//                    ble_prepare_packt(&app_vars.pdu[0], app_vars.pdu_len);
+                    app_vars.pdu_len = prepare_freq_setting_pdu(CFG_COARSE, cfg_mid, cfg_fine);
+                    ble_prepare_packt(&app_vars.pdu[0], app_vars.pdu_len);
                     
                     LC_FREQCHANGE(CFG_COARSE, cfg_mid, cfg_fine);
                     
@@ -269,8 +269,12 @@ uint8_t prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine) {
     i = 0;
     field_len = 0;
     
-    app_vars.pdu[i++] = flipChar(0x20);
-    app_vars.pdu[i++] = flipChar(0x03);
+    app_vars.pdu[i++] = flipChar(0x42);
+    app_vars.pdu[i++] = flipChar(0x09);
+	
+		app_vars.pdu[i++] = flipChar(0xCC);
+		app_vars.pdu[i++] = flipChar(0xBB);
+		app_vars.pdu[i++] = flipChar(0xAA);
 //		app_vars.pdu[i++] = 0x20;
 //    app_vars.pdu[i++] = 0x03;
 	
@@ -281,7 +285,7 @@ uint8_t prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine) {
 //    app_vars.pdu[i++] = flipChar(0xAB);
 //    app_vars.pdu[i++] = flipChar(0xAB);
     
-    field_len += 5;
+    field_len += 8;
     
     return field_len;
 }
