@@ -119,6 +119,7 @@ int main(void) {
     printf("Cal complete\r\n");
     
     // schedule the first timer
+		app_vars.cfg_coarse=19;
     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
 
     while(1){

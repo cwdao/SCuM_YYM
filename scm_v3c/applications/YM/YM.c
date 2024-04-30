@@ -411,7 +411,7 @@ void course_estimate(void){
     app_vars.freq_setFinish_flag = 0;
     while(app_vars.freq_setFinish_flag == 0);
     p3R_count = app_vars.avg_sample;
-    // printf("p3R_count=%d\r\n",p3R_count);
+    // printf("RC_count=%d\r\n",p3R_count);
     // Inv_equ_c = (double)app_vars.RC_count;
     // // printf("ah=%f",Inv_equ_c);
     // Comp_coff = Inv_equ_c/ 2000;
@@ -421,6 +421,7 @@ void course_estimate(void){
     // printf("coff=%f\r\n",app_vars.Comp_coff);
     app_vars.freq_abs = (int)(Freq_target*app_vars.RC_count);
     printf("freq=%d\r\n",app_vars.freq_abs);
+    printf("RC=%d\r\n",app_vars.RC_count);
 
     p1y = (p1L_count + p1R_count)/2;
     p2y = (p2L_count + p2R_count)/2;
@@ -476,13 +477,13 @@ void course_estimate(void){
         while(app_vars.freq_setFinish_flag == 0);
         p1y = app_vars.avg_sample;
 
-        LC_FREQCHANGE(p1R_count,16,0);
+        LC_FREQCHANGE(p1R_count,0,0);
         rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
         app_vars.freq_setFinish_flag = 0;
         while(app_vars.freq_setFinish_flag == 0);
         p2x = app_vars.avg_sample;
 
-        LC_FREQCHANGE(p1R_count,31,31);
+        LC_FREQCHANGE(p1R_count,15,31);
         rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
         app_vars.freq_setFinish_flag = 0;
         while(app_vars.freq_setFinish_flag == 0);
@@ -505,13 +506,13 @@ void course_estimate(void){
         while(app_vars.freq_setFinish_flag == 0);
         p1y = app_vars.avg_sample;
 
-        LC_FREQCHANGE(p1R_count,16,0);
+        LC_FREQCHANGE(p1R_count,0,0);
         rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
         app_vars.freq_setFinish_flag = 0;
         while(app_vars.freq_setFinish_flag == 0);
         p2x = app_vars.avg_sample;
 
-        LC_FREQCHANGE(p1R_count,31,31);
+        LC_FREQCHANGE(p1R_count,15,31);
         rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
         app_vars.freq_setFinish_flag = 0;
         while(app_vars.freq_setFinish_flag == 0);
@@ -540,13 +541,13 @@ void course_estimate(void){
             while(app_vars.freq_setFinish_flag == 0);
             p1y = app_vars.avg_sample;
 
-            LC_FREQCHANGE(p1R_count,16,0);
+            LC_FREQCHANGE(p1R_count,0,0);
             rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
             app_vars.freq_setFinish_flag = 0;
             while(app_vars.freq_setFinish_flag == 0);
             p2x = app_vars.avg_sample;
 
-            LC_FREQCHANGE(p1R_count,31,31);
+            LC_FREQCHANGE(p1R_count,15,31);
             rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
             app_vars.freq_setFinish_flag = 0;
             while(app_vars.freq_setFinish_flag == 0);
@@ -569,13 +570,13 @@ void course_estimate(void){
             while(app_vars.freq_setFinish_flag == 0);
             p1y = app_vars.avg_sample;
 
-            LC_FREQCHANGE(p1R_count,16,0);
+            LC_FREQCHANGE(p1R_count,0,0);
             rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
             app_vars.freq_setFinish_flag = 0;
             while(app_vars.freq_setFinish_flag == 0);
             p2x = app_vars.avg_sample;
 
-            LC_FREQCHANGE(p1R_count,31,31);
+            LC_FREQCHANGE(p1R_count,15,31);
             rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
             app_vars.freq_setFinish_flag = 0;
             while(app_vars.freq_setFinish_flag == 0);
@@ -595,7 +596,7 @@ void course_estimate(void){
     x_matrix_inverse[1][0] = p1x - x_matrix_inverse[0][1]; //b=y-k*x
     x_matrix_inverse[0][1] = app_vars.freq_abs - x_matrix_inverse[1][0]; //y-b
     para_matrix[0][0] = x_matrix_inverse[0][1]/x_matrix_inverse[0][0]; //p1 set = (y-b)/k
-    printf("p1_para = %f\r\n", para_matrix[0][0]);
+    // printf("p1_para = %f\r\n", para_matrix[0][0]);
     // p2区
     p3L_count = p2y - p2x;
     p3R_count = 16 - 0;
@@ -604,7 +605,7 @@ void course_estimate(void){
     x_matrix_inverse[1][0] = p2y - x_matrix_inverse[0][1];// b = y-kx
     x_matrix_inverse[0][1] = app_vars.freq_abs - x_matrix_inverse[1][0]; //y-b
     para_matrix[1][0] = x_matrix_inverse[0][1]/x_matrix_inverse[0][0]; //p2 set = (y-b)/k
-    printf("p2_para = %f\r\n", para_matrix[1][0]);
+    // printf("p2_para = %f\r\n", para_matrix[1][0]);
     //下面需要验证是否在该范围中
     //可能遇到的问题是LC_count与发射频率的误差
 
@@ -623,7 +624,7 @@ void course_estimate(void){
     if ((int)para_matrix[1][0]>=0 && (int)para_matrix[1][0]<=16)
     {
         p2x = (int)para_matrix[1][0];
-        x_matrix_inverse[1][1] = para_matrix[1][0] - p1x;
+        x_matrix_inverse[1][1] = para_matrix[1][0] - p2x;
         p2y = (int)(x_matrix_inverse[1][1]*31);
     }
     else

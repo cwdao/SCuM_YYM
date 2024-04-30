@@ -30,6 +30,7 @@
 #define CFG_COARSE          20
 
 #define HS_3
+#define MODE 1  //mode==1 is wider sweep
 
 #ifdef TEST
     #define MID_START   0
@@ -47,8 +48,10 @@
 #endif
 
 #ifdef HS_3
-    #define MID_START   24
-    #define MID_END     26
+		#define COURSE_START 19
+		#define COURSE_END   22
+    #define MID_START    0
+    #define MID_END      32
 #endif
 
 
@@ -94,7 +97,10 @@ void    delay_lc_setup(void);
 int main(void) {
 
     uint32_t calc_crc;
-
+#if MODE==1
+		uint8_t cfg_course;
+#elif MODE==0
+#endif
     uint8_t cfg_mid;
     uint8_t cfg_fine;
     
@@ -182,7 +188,47 @@ int main(void) {
         // loop through all configuration
         
         // customize coarse, mid, fine values to change the sweeping range
+			
+#if  MODE==1
+			for (cfg_course=COURSE_START; cfg_course<COURSE_END; cfg_course++){
         for (cfg_mid=MID_START;cfg_mid<MID_END;cfg_mid++) {
+            for (cfg_fine=0;cfg_fine<32;cfg_fine+=1) {
+                
+                printf(
+                    "coarse=%d, middle=%d, fine=%d\r\n", 
+                    cfg_course,cfg_mid,cfg_fine
+                );
+                
+                for (i=0;i<NUMPKT_PER_CFG;i++) {
+                    
+                    radio_rfOff();
+                    
+                    app_vars.pdu_len = prepare_freq_setting_pdu(cfg_course, cfg_mid, cfg_fine);
+                    ble_prepare_packt(&app_vars.pdu[0], app_vars.pdu_len);
+                    
+                    LC_FREQCHANGE(cfg_course, cfg_mid, cfg_fine);
+                    
+                    delay_lc_setup();
+                    
+                    ble_load_tx_arb_fifo();
+                    radio_txEnable();
+                    
+                    delay_tx();
+                    
+                    ble_txNow_tx_arb_fifo();
+                    
+                    // need to make sure the tx is done before 
+                    // starting a new transmission
+                    
+                    rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+                    app_vars.sendDone = false;
+                    while (app_vars.sendDone==false);
+                }
+            }
+        }
+    }
+#elif MODE==0
+for (cfg_mid=MID_START;cfg_mid<MID_END;cfg_mid++) {
             for (cfg_fine=0;cfg_fine<32;cfg_fine+=1) {
                 
                 printf(
@@ -217,7 +263,8 @@ int main(void) {
                 }
             }
         }
-    }
+#endif
+	}
 }
 
 //=========================== public ==========================================
