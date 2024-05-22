@@ -17,6 +17,7 @@ side.
 #include "rftimer.h"
 #include "radio.h"
 #include "optical.h"
+#include "gpio.h"
 
 //=========================== defines =========================================
 
@@ -168,6 +169,7 @@ void    cb_timer(void) {
     uint32_t count_adc;
     
     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+		gpio_4_toggle();
     read_counters_3B(&count_2M,&count_LC,&count_adc);
     app_vars.samples[app_vars.sample_index] = count_LC;
     app_vars.sample_index++;
@@ -177,10 +179,10 @@ void    cb_timer(void) {
         
         printf(
             "%d.%d.%d.%d\r\n",
-            app_vars.cfg_coarse,
             app_vars.cfg_mid,
             app_vars.cfg_fine,
-            avg_sample
+            avg_sample,
+						count_2M
         );
         
         update_configuration();

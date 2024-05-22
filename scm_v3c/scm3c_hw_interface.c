@@ -1013,7 +1013,7 @@ void radio_init_divider(unsigned int div_value){
     //set_asc_bit(1033);
     
     // set divider to div-by-480
-    divProgram(480,1,1);
+    divProgram(48,1,1);
     
     // Set sel12 = 1 (choose whether x2 is active)
     // Want this set to 1 or else the divider output falling edges will be messed up

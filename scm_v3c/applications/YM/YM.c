@@ -18,7 +18,7 @@
 #define CRC_VALUE           (*((unsigned int *) 0x0000FFFC))
 #define CODE_LENGTH         (*((unsigned int *) 0x0000FFF8))
 
-#define CHANNEL             36       // ble channel
+#define CHANNEL             0       // ble channel
 
 #define TXPOWER             0xD8    // used for ibeacon pkt
 
@@ -30,7 +30,7 @@
 #define setPerGroup 		32
 #define setPerGroup2		32*32
 
-#define Freq_target         1.290 //(Target_channel/960)/2000
+#define Freq_target         1.252 //(Target_channel/960)/2000
 // #define RC_count_target     2000
 
 // only this coarse settings are swept, 

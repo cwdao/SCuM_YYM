@@ -5,9 +5,6 @@
             "includePath": [
                 "d:\\OneDrive - HKUST (Guangzhou)\\SchoolTasks\\SCuMRobot\\SCuM_BLEorigin\\scum-test-code\\scm_v3c\\",
                 "D:\\Keil_v5\\ARM\\ARMCC\\include",
-                "D:\\Keil_v5\\ARM\\ARMCC\\include\\arm_linux",
-                "D:\\Keil_v5\\ARM\\ARMCC\\include\\arm_linux_compat",
-                "D:\\Keil_v5\\ARM\\ARMCC\\include\\rw",
                 "d:\\OneDrive - HKUST (Guangzhou)\\SchoolTasks\\SCuMRobot\\SCuM_BLEorigin\\scum-test-code\\scm_v3c\\applications\\YM",
                 "d:\\OneDrive - HKUST (Guangzhou)\\SchoolTasks\\SCuMRobot\\SCuM_BLEorigin\\scum-test-code\\scm_v3c"
             ],

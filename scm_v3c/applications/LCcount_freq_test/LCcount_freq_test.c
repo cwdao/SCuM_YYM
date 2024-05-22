@@ -11,6 +11,7 @@
 #include "radio.h"
 #include "ble.h"
 #include "optical.h"
+#include "gpio.h"
 
 //=========================== defines =========================================
 
@@ -23,14 +24,15 @@
 
 #define NUMPKT_PER_CFG      100
 #define STEPS_PER_CONFIG    32
+#define	TIMER_PERIOD2       2000
 #define TIMER_PERIOD        2000  // 500 = 1ms@500kHz
+#define NUM_SAMPLES					10
 
 // only this coarse settings are swept, 
 // channel 37 and 0 are known within the setting scope of coarse=24
 #define CFG_COARSE          20
 
 #define HS_3
-#define MODE 1  //mode==1 is wider sweep
 
 #ifdef TEST
     #define MID_START   0
@@ -48,8 +50,8 @@
 #endif
 
 #ifdef HS_3
-		#define COURSE_START 19
-		#define COURSE_END   22
+		#define COURSE_START 22
+		#define COURSE_END   23
     #define MID_START    0
     #define MID_END      32
 #endif
@@ -76,6 +78,10 @@ typedef struct {
     
     uint8_t         pdu[PDU_LENGTH+CRC_LENGTH]; // protocol data unit
     uint8_t         pdu_len;
+		bool 						countFlag;
+		bool						transmitFlag;
+		volatile    uint8_t         sample_index;
+                uint32_t        samples[NUM_SAMPLES];
 } app_vars_t;
 
 app_vars_t app_vars;
@@ -91,6 +97,7 @@ uint8_t prepare_pdu_cte_inline(void);
 uint8_t prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine);
 void    delay_tx(void);
 void    delay_lc_setup(void);
+uint32_t     average_sample(void);
 
 //=========================== main ============================================
 
@@ -101,6 +108,7 @@ int main(void) {
 		uint8_t cfg_course;
 #elif MODE==0
 #endif
+		uint8_t cfg_course;
     uint8_t cfg_mid;
     uint8_t cfg_fine;
     
@@ -109,6 +117,7 @@ int main(void) {
     uint8_t offset;
     
     uint32_t t;
+		app_vars.countFlag = 0;
 
     memset(&app_vars, 0, sizeof(app_vars_t));
 
@@ -188,12 +197,12 @@ int main(void) {
         // loop through all configuration
         
         // customize coarse, mid, fine values to change the sweeping range
-			
-#if  MODE==1
-			for (cfg_course=COURSE_START; cfg_course<COURSE_END; cfg_course++){
-        for (cfg_mid=MID_START;cfg_mid<MID_END;cfg_mid++) {
-            for (cfg_fine=0;cfg_fine<32;cfg_fine+=1) {
-                
+			cfg_course = 23;
+			cfg_mid = 23;
+			cfg_fine = 23;
+								
+								rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD2);
+								while(app_vars.countFlag == 0){};
                 printf(
                     "coarse=%d, middle=%d, fine=%d\r\n", 
                     cfg_course,cfg_mid,cfg_fine
@@ -223,47 +232,10 @@ int main(void) {
                     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
                     app_vars.sendDone = false;
                     while (app_vars.sendDone==false);
-                }
-            }
-        }
+										app_vars.countFlag = 0;
+       
     }
-#elif MODE==0
-for (cfg_mid=MID_START;cfg_mid<MID_END;cfg_mid++) {
-            for (cfg_fine=0;cfg_fine<32;cfg_fine+=1) {
-                
-                printf(
-                    "coarse=%d, middle=%d, fine=%d\r\n", 
-                    CFG_COARSE,cfg_mid,cfg_fine
-                );
-                
-                for (i=0;i<NUMPKT_PER_CFG;i++) {
-                    
-                    radio_rfOff();
-                    
-                    app_vars.pdu_len = prepare_freq_setting_pdu(CFG_COARSE, cfg_mid, cfg_fine);
-                    ble_prepare_packt(&app_vars.pdu[0], app_vars.pdu_len);
-                    
-                    LC_FREQCHANGE(CFG_COARSE, cfg_mid, cfg_fine);
-                    
-                    delay_lc_setup();
-                    
-                    ble_load_tx_arb_fifo();
-                    radio_txEnable();
-                    
-                    delay_tx();
-                    
-                    ble_txNow_tx_arb_fifo();
-                    
-                    // need to make sure the tx is done before 
-                    // starting a new transmission
-                    
-                    rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-                    app_vars.sendDone = false;
-                    while (app_vars.sendDone==false);
-                }
-            }
-        }
-#endif
+
 	}
 }
 
@@ -273,10 +245,53 @@ for (cfg_mid=MID_START;cfg_mid<MID_END;cfg_mid++) {
 
 //==== callback
 
-void cb_timer(void) {
-    app_vars.sendDone = true;
-
+uint32_t     average_sample(void){
+    uint8_t i;
+    uint32_t avg;
+    
+    avg = 0;
+    for (i=0;i<NUM_SAMPLES;i++) {
+        avg += app_vars.samples[i];
+    }
+    avg = avg/NUM_SAMPLES;
+    return avg;
 }
+
+void cb_timer(void) {
+    
+    uint32_t avg_sample;
+    uint32_t count_2M;
+    uint32_t count_LC;
+    uint32_t count_adc;
+    gpio_4_toggle();
+	
+		if(app_vars.countFlag == 0){
+			
+			if(app_vars.sample_index!=NUM_SAMPLES){
+				rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+			}
+			
+			read_counters_3B(&count_2M,&count_LC,&count_adc);
+			app_vars.samples[app_vars.sample_index] = count_LC;
+			app_vars.sample_index++;
+			if (app_vars.sample_index==NUM_SAMPLES) {
+					app_vars.countFlag = 1;
+					app_vars.sample_index = 0;
+					avg_sample = average_sample();
+					
+					printf(
+							"%d.%d\r\n",
+							count_LC,
+							count_2M
+					);
+			}
+		}
+		
+		if(app_vars.countFlag == 1){
+			app_vars.sendDone = true;
+		}
+		
+	}
 
 void    cb_endFrame_tx(uint32_t timestamp){
     
