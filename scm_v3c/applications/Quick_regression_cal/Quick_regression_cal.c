@@ -1,7 +1,8 @@
-/**
-\brief This program lets SCuM transmit BLE packets over a range of 
-    frequency settings.
-*/
+/***************************/
+//Project: Quick Regression Calibration 
+//Author：Yiming YUAN(yyuan861@connect.hkust-gz.edu.cn)
+//Discript：Quick Calculate the <coarse> and <mid> <fine> value for transmit
+/**************************/
 
 #include <string.h>
 #include <math.h>
@@ -18,8 +19,6 @@
 #define CRC_VALUE           (*((unsigned int *) 0x0000FFFC))
 #define CODE_LENGTH         (*((unsigned int *) 0x0000FFF8))
 
-#define CHANNEL             0       // ble channel
-
 #define TXPOWER             0xD8    // used for ibeacon pkt
 
 #define NUMPKT_PER_CFG      100
@@ -27,54 +26,16 @@
 #define TIMER_PERIOD        500  // 500 = 1ms@500kHz
 #define TIMER_PERIOD_BLE    2000
 
-#define setPerGroup 		32
-#define setPerGroup2		32*32
-
+#define CHANNEL             0       // ble channel
 #define Freq_target         1.252 //(Target_channel/960)/2000
 // #define RC_count_target     2000
 
 // only this coarse settings are swept, 
 // channel 37 and 0 are known within the setting scope of coarse=24
-#define CFG_COARSE          23
 
 #define NUM_SAMPLES         10
 #define RANGE               8
 
-#define HS_3
-
-//the number of the matrix of x
-#define N                   2
-
-#ifdef TEST
-    #define MID_START       0
-    #define MID_END         32
-#endif
-
-#ifdef HS_2
-    #define MID_START       15
-    #define MID_END         20
-#endif
-
-#ifdef HS_1
-    #define MID_START       0
-    #define MID_END         32
-#endif
-
-#ifdef HS_3
-    #define MID_START       18
-    #define MID_END         31
-#endif
-
-
-// const static uint8_t ble_device_addr[6] = {
-//     0xaa, 0xbb, 0xcc, 0xcc, 0xbb, 0xaa
-// };
-
-// const static uint8_t ble_uuid[16]       = {
-
-//     0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf,
-//     0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf, 0xcf
-// };
 
 //=========================== variables =======================================
 
@@ -101,16 +62,22 @@ typedef struct {
                     uint32_t 				count_adc;
                     bool 				    freq_setFinish_flag;
                     uint8_t 				freq_setTimes_flag;
-                    bool                    calculate_flag;
-                    uint16_t 				calculate_times_flag;
+                    bool                    calculate_flag;             //give time for calculating
+                    uint16_t 				calculate_times_flag;       //give time for calculating
                     bool                    RC_count_flag;
+                    bool                    freq_setFinish_flag2;        //flag of finish estimate setting
+
                     int 				    RC_count;                    //count the number of 2M
                     double                  Comp_coff;
                     int                     freq_abs;
-                    bool                    freq_setFinish_flag2;
+                    //to decrease the time, save the rough estimate parameter
+                    double                  para_matrix[2][1];
+                    double                  Inv_equ_c;  
 } app_vars_t;
 
 app_vars_t app_vars;
+
+double freqTargetList[40] = {1.252, 1.253, 1.254, 1.255, 1.256, 1.257, 1.258, 1.259, 1.260, 1.261, 1.263, 1.265, 1.266, 1.267, 1.268, 1.269, 1.270, 1.271, 1.272, 1.273, 1.274, 1.275, 1.276, 1.277, 1.278, 1.279, 1.280, 1.281, 1.282, 1.283, 1.284, 1.285, 1.286, 1.288, 1.289, 1.290, 1.291, 1.251, 1.264, 1.292};
 
 
 //=========================== prototypes ======================================
@@ -121,28 +88,19 @@ uint8_t prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine);
 
 void        delay_tx(void);
 void        delay_lc_setup(void);
-void        course_estimate(void);
+void        course_estimate(uint16_t channelTarget);
 void        Gaussian_elimination(int x_matrix_raw[2][2], double x_matrix_inverse[2][2]);
 void        matrixMultiplication(double x_matrix_inverse[][2], int y_matrix[][1], double para_matrix[][1]);
 void        Solve_Equation(double para_matrix[][1], double Inv_equ_c, double x_matrix_inverse[][2]);
+void         __TransmitPacket (uint16_t channelTarget);
+void        __PresiseEstimate(void);
 
 //=========================== main ============================================
 
 int main(void) {
 
     uint32_t calc_crc;
-    int i;
-    int j;
-    int offset;
-    uint8_t cfg_course;
-    uint8_t cfg_mid;
-    int cfg_fine;
-    
-    // uint8_t i;
-    // uint8_t j;
-    // uint8_t offset;
-    
-    // uint32_t t;
+    uint16_t channelTarget;
 
     memset(&app_vars, 0, sizeof(app_vars_t));
 
@@ -186,20 +144,7 @@ int main(void) {
     // Turn off polyphase and disable mixer
     ANALOG_CFG_REG__16 = 0x6;
 
-// #if CHANNEL==37
-//     // For TX, LC target freq = 2.402G - 0.25M = 2.40175 GHz.
-//     optical_setLCTarget(250182);
-// #elif CHANNEL==0
-    
-//     // For TX, LC target freq = 2.404G - 0.25M = 2.40375 GHz.
-//     optical_setLCTarget(250390);
-// #endif
 
-    // // For the LO, calibration for RX channel 11, so turn on AUX, IF, and LO LDOs
-    // // by calling radio rxEnable
-    // radio_rxEnable();
-
-    // Enable optical SFD interrupt for optical calibration
     optical_enable();
 
     // Wait for optical cal to finish
@@ -211,105 +156,14 @@ int main(void) {
     radio_enable_interrupts();
 
     radio_rfOff();
-    
-    ble_set_channel(CHANNEL);
-		
-//		//test frame in Nordic
-//		ble_gen_packet();
 	radio_txEnable();
-	course_estimate();
+    
+    //set a initial channel
+    channelTarget = CHANNEL;
 
     while (1) {
         
-        //p1
-        cfg_course = app_vars.tx_coarse_p1;
-        for(offset = -RANGE; offset <= RANGE; offset++){
-            cfg_fine = app_vars.tx_fine_p1 + offset;
-            cfg_mid = app_vars.tx_mid_p1;
-            if(cfg_fine<0){
-                cfg_fine = 31+offset;
-                cfg_mid -= 1;
-            }else if(cfg_fine>32){
-                cfg_fine = offset;
-                cfg_mid += 1;
-            }   
-            printf(
-                "coarse=%d, middle=%d, fine=%d\r\n", 
-                cfg_course,cfg_mid,cfg_fine
-            );
-            
-            for (i=0;i<NUMPKT_PER_CFG;i++) {
-                
-                radio_rfOff();
-                
-                app_vars.pdu_len = prepare_freq_setting_pdu(cfg_course, cfg_mid, cfg_fine);
-                ble_prepare_packt(&app_vars.pdu[0], app_vars.pdu_len);
-                
-                LC_FREQCHANGE(cfg_course, cfg_mid, cfg_fine);
-                
-                delay_lc_setup();
-                
-                ble_load_tx_arb_fifo();
-                radio_txEnable();
-                
-                delay_tx();
-                
-                ble_txNow_tx_arb_fifo();
-                
-                // need to make sure the tx is done before 
-                // starting a new transmission
-                
-                rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-                app_vars.sendDone = false;
-                while (app_vars.sendDone==false);
-            }
-            
-        }
-        //p2
-        cfg_course = app_vars.tx_coarse_p2;
-        for(offset = -RANGE; offset <= RANGE; offset++){
-            cfg_fine = app_vars.tx_fine_p2 + offset;
-            cfg_mid = app_vars.tx_mid_p2;
-            if(cfg_fine<0){
-                cfg_fine = 31+offset;
-                cfg_mid -= 1;
-            }else if(cfg_fine>31){
-                cfg_fine = offset;
-                cfg_mid += 1;
-            }   
-            printf(
-                "coarse=%d, middle=%d, fine=%d\r\n", 
-                cfg_course,cfg_mid,cfg_fine
-            );
-            
-            for (i=0;i<NUMPKT_PER_CFG;i++) {
-                
-                radio_rfOff();
-                
-                app_vars.pdu_len = prepare_freq_setting_pdu(cfg_course, cfg_mid, cfg_fine);
-                ble_prepare_packt(&app_vars.pdu[0], app_vars.pdu_len);
-                
-                LC_FREQCHANGE(cfg_course, cfg_mid, cfg_fine);
-                
-                delay_lc_setup();
-                
-                ble_load_tx_arb_fifo();
-                radio_txEnable();
-                
-                delay_tx();
-                
-                ble_txNow_tx_arb_fifo();
-                
-                // need to make sure the tx is done before 
-                // starting a new transmission
-                
-                rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-                app_vars.sendDone = false;
-                while (app_vars.sendDone==false);
-            }
-            
-        }
-        
+        __TransmitPacket(channelTarget);
 
     }
 }
@@ -331,15 +185,16 @@ uint32_t     average_sample(void){
     return avg;
 }
 
+/**************************/
+//Function: As a timer, the timer source is RF timer 500kHz
+//Parameter: None
+//Return: None
+//Call: After 'rftimer_setCompareIn'
+//Description: This function is called when the timer is triggered, seperated to two parts, one is for estimate process, and another is for transmit process.
+//Date: 31.May.2024
+/*************************/
 void cb_timer(void) {
     if(app_vars.freq_setFinish_flag2 == 0){
-    //		app_vars.cb_timer_num ++;
-    //		if(app_vars.cb_timer_num==4){
-    //			app_vars.sendDone = true;
-    //			app_vars.cb_timer_num = 0;
-    //		}
-    //		rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-    //			printf("yes!");
         rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
         read_counters_3B(&app_vars.count_2M,&app_vars.count_LC,&app_vars.count_adc);
         if (app_vars.RC_count_flag==0)
@@ -388,7 +243,6 @@ void cb_timer(void) {
     {
         app_vars.sendDone = true;
     }
-    
 }
 
 void    cb_endFrame_tx(uint32_t timestamp){
@@ -415,9 +269,18 @@ void delay_lc_setup(void) {
     for (i=0;i<LC_SETUP_DELAY;i++);
 }
 
-//regression
+//==== regression
 //0428 根据RC timer的值设置补充系数
-void course_estimate(void){
+
+/**************************/
+//Function: Calculate the <coarse>,<mid>,<fine>
+//Parameter: None
+//Return: None (return transmit setting to appvars paraset)
+//Call: Before the transmit
+//Date: 31.May.2024
+/*************************/
+void course_estimate(uint16_t channelTarget){
+   
     //用无符号数总会出现奇怪的问题
     int p1L_count, p1R_count, p2L_count, p2R_count, p3L_count, p3R_count;
     int p1x, p1y, p2x, p2y, p3x, p3y;
@@ -483,9 +346,9 @@ void course_estimate(void){
     // Comp_coff = Inv_equ_c/ 2000;
 
     //这一步为什么算不出来 直接赋值就可以算出来？
-    app_vars.Comp_coff = Freq_target;
+    app_vars.Comp_coff = freqTargetList[channelTarget];
     // printf("coff=%f\r\n",app_vars.Comp_coff);
-    app_vars.freq_abs = (int)(Freq_target*app_vars.RC_count);
+    app_vars.freq_abs = (int)(freqTargetList[channelTarget]*app_vars.RC_count);
     printf("freq=%d\r\n",app_vars.freq_abs);
     printf("RC=%d\r\n",app_vars.RC_count);
 
@@ -524,7 +387,19 @@ void course_estimate(void){
     x_matrix_inverse[1][0] = x_matrix_inverse[0][0] + x_matrix_inverse[0][1];
     Inv_equ_c = p2y - x_matrix_inverse[1][0];
     printf("Inv_equ_c=%f\r\n",Inv_equ_c);
-    Solve_Equation(para_matrix, Inv_equ_c,x_matrix_inverse);
+    app_vars.Inv_equ_c = Inv_equ_c;
+    app_vars.para_matrix[0][0] = para_matrix[0][0];
+    app_vars.para_matrix[1][0] = para_matrix[1][0];
+}
+
+void __PresiseEstimate(void){
+    int p1L_count, p1R_count, p2L_count, p2R_count, p3L_count, p3R_count;
+    int p1x, p1y, p2x, p2y, p3x, p3y;
+    double x_matrix_inverse[2][2];
+    double assistMatrix[2][1];  //assist calculating, sometime directive calculating will stuck
+    
+    printf("begin precise stimate\r\n");
+    Solve_Equation(app_vars.para_matrix, app_vars.Inv_equ_c,x_matrix_inverse);
     //开始分区，p1L_count, p1R_count, p2L_count, p2R_count, p3L_count, p3R_count释放，帮助计算
     if ((int)x_matrix_inverse[0][0]%10 <=5)
     {
@@ -592,7 +467,6 @@ void course_estimate(void){
     //可以优化，如果比其中一个大，顺延到下一个course的下区
     while ((app_vars.freq_abs > p1y && app_vars.freq_abs > p2y)||(app_vars.freq_abs < p1x && app_vars.freq_abs < p2x))
     {
-        /* code */
         x_matrix_inverse[1][0] = x_matrix_inverse[1][0] + 1;
         if ((int)x_matrix_inverse[0][0]%10 <=5)
         {
@@ -670,8 +544,8 @@ void course_estimate(void){
     x_matrix_inverse[0][1] = x_matrix_inverse[0][0]*16; //k*x
     x_matrix_inverse[1][0] = p1x - x_matrix_inverse[0][1]; //b=y-k*x
     x_matrix_inverse[0][1] = app_vars.freq_abs - x_matrix_inverse[1][0]; //y-b
-    para_matrix[0][0] = x_matrix_inverse[0][1]/x_matrix_inverse[0][0]; //p1 set = (y-b)/k
-    // printf("p1_para = %f\r\n", para_matrix[0][0]);
+    assistMatrix[0][0] = x_matrix_inverse[0][1]/x_matrix_inverse[0][0]; //p1 set = (y-b)/k
+
     // p2区
     p3L_count = p2y - p2x;
     p3R_count = 16 - 0;
@@ -679,16 +553,16 @@ void course_estimate(void){
     x_matrix_inverse[0][1] = x_matrix_inverse[0][0]*16; //k*x
     x_matrix_inverse[1][0] = p2y - x_matrix_inverse[0][1];// b = y-kx
     x_matrix_inverse[0][1] = app_vars.freq_abs - x_matrix_inverse[1][0]; //y-b
-    para_matrix[1][0] = x_matrix_inverse[0][1]/x_matrix_inverse[0][0]; //p2 set = (y-b)/k
-    // printf("p2_para = %f\r\n", para_matrix[1][0]);
+    assistMatrix[1][0] = x_matrix_inverse[0][1]/x_matrix_inverse[0][0]; //p2 set = (y-b)/k
+
     //下面需要验证是否在该范围中
     //可能遇到的问题是LC_count与发射频率的误差
 
     //输出结果
-    if ((int)para_matrix[0][0]>=16 && (int)para_matrix[0][0]<=32)
+    if ((int)assistMatrix[0][0]>=16 && (int)assistMatrix[0][0]<=32)
     {
-        p1x = (int)para_matrix[0][0];
-        x_matrix_inverse[0][1] = para_matrix[0][0] - p1x;
+        p1x = (int)assistMatrix[0][0];
+        x_matrix_inverse[0][1] = assistMatrix[0][0] - p1x;
         p1y = (int)(x_matrix_inverse[0][1]*31);
     }
     else
@@ -696,10 +570,10 @@ void course_estimate(void){
         p1x = 0;
         p1y = 0;
     }
-    if ((int)para_matrix[1][0]>=0 && (int)para_matrix[1][0]<=16)
+    if ((int)assistMatrix[1][0]>=0 && (int)assistMatrix[1][0]<=16)
     {
-        p2x = (int)para_matrix[1][0];
-        x_matrix_inverse[1][1] = para_matrix[1][0] - p2x;
+        p2x = (int)assistMatrix[1][0];
+        x_matrix_inverse[1][1] = assistMatrix[1][0] - p2x;
         p2y = (int)(x_matrix_inverse[1][1]*31);
     }
     else
@@ -717,13 +591,19 @@ void course_estimate(void){
     
 }
 
+/**************************/
+//Function: Use Gaussian elimination to calculate the inverse of the matrix for transmit setting
+//Parameter: x_matrix_raw[][],  x_matrix_inversep[][]
+//Return: None (return inverse parameter directively)
+//Call: course_estimate 
+//Date: 31.May.2024
+/*************************/
 //使用高斯消元法对矩阵进行求逆
 void Gaussian_elimination(int x_matrix_raw[2][2], double x_matrix_inverse[2][2]) {
     // 计算矩阵的行列式
     double determinant;
 
     determinant = x_matrix_raw[0][0] * x_matrix_raw[1][1] - x_matrix_raw[0][1] * x_matrix_raw[1][0];
-    // printf("determinant=%f\r\n",determinant);
     
     // 检查行列式是否为0，若为0则矩阵不可逆
     if (determinant == 0) {
@@ -739,9 +619,15 @@ void Gaussian_elimination(int x_matrix_raw[2][2], double x_matrix_inverse[2][2])
     app_vars.calculate_flag = 1;
     while(app_vars.calculate_flag == 1){
     }; 
-    // printf("xmatrix_inv = %f,%f,%f,%f\r\n", x_matrix_inverse[0][0], x_matrix_inverse[0][1], x_matrix_inverse[1][0], x_matrix_inverse[1][1]);
 }
 
+/**************************/
+//Function: multiple two matrix
+//Parameter: x_matrix_raw[][],  x_matrix_inversep[][]
+//Return: None (return matrix directively)
+//Call: course_estimate 
+//Date: 31.May.2024
+/*************************/
 void matrixMultiplication(double x_matrix_inverse[][2], int y_matrix[][1], double para_matrix[][1]) {
     int i, j, k;
     
@@ -772,12 +658,11 @@ void Solve_Equation(double para_matrix[][1], double Inv_equ_c, double x_matrix_i
     x_matrix_inverse[0][0] = x_matrix_inverse[1][0] * 10;
     printf("solve = %f\r\n", x_matrix_inverse[1][0]);
 }
-//==== pdu related
 
+//==== pdu related
 uint8_t prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine) {
     
     uint8_t i;
-    uint8_t j;
     
     uint8_t field_len;
     
@@ -806,4 +691,113 @@ uint8_t prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine) {
     field_len += 8;
     
     return field_len;
+}
+
+//==== transmit process
+/**************************/
+//Function: transmit pdu packet on selected channel
+//Parameter: channelTarget is listed, the channelTarget as a index to realize channel hopping
+//Return: None
+//Call: main 
+//Date: 31.May.2024
+/*************************/
+void __TransmitPacket (uint16_t channelTarget){
+    int i;
+    int offset;
+    uint8_t cfg_course;
+    uint8_t cfg_mid;
+    int cfg_fine;
+
+    ble_set_channel(channelTarget);
+	course_estimate(channelTarget);
+    __PresiseEstimate();
+
+    //p1
+    cfg_course = app_vars.tx_coarse_p1;
+    for(offset = -RANGE; offset <= RANGE; offset++){
+        cfg_fine = app_vars.tx_fine_p1 + offset;
+        cfg_mid = app_vars.tx_mid_p1;
+        if(cfg_fine<0){
+            cfg_fine = 31+offset;
+            cfg_mid -= 1;
+        }else if(cfg_fine>32){
+            cfg_fine = offset;
+            cfg_mid += 1;
+        }   
+        printf(
+            "coarse=%d, middle=%d, fine=%d\r\n", 
+            cfg_course,cfg_mid,cfg_fine
+        );
+        
+        for (i=0;i<NUMPKT_PER_CFG;i++) {
+            
+            radio_rfOff();
+            
+            app_vars.pdu_len = prepare_freq_setting_pdu(cfg_course, cfg_mid, cfg_fine);
+            ble_prepare_packt(&app_vars.pdu[0], app_vars.pdu_len);
+            
+            LC_FREQCHANGE(cfg_course, cfg_mid, cfg_fine);
+            
+            delay_lc_setup();
+            
+            ble_load_tx_arb_fifo();
+            radio_txEnable();
+            
+            delay_tx();
+            
+            ble_txNow_tx_arb_fifo();
+            
+            // need to make sure the tx is done before 
+            // starting a new transmission
+            
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.sendDone = false;
+            while (app_vars.sendDone==false);
+        }
+        
+    }
+    //p2
+    cfg_course = app_vars.tx_coarse_p2;
+    for(offset = -RANGE; offset <= RANGE; offset++){
+        cfg_fine = app_vars.tx_fine_p2 + offset;
+        cfg_mid = app_vars.tx_mid_p2;
+        if(cfg_fine<0){
+            cfg_fine = 31+offset;
+            cfg_mid -= 1;
+        }else if(cfg_fine>32){
+            cfg_fine = offset;
+            cfg_mid += 1;
+        }   
+        printf(
+            "coarse=%d, middle=%d, fine=%d\r\n", 
+            cfg_course,cfg_mid,cfg_fine
+        );
+        
+        for (i=0;i<NUMPKT_PER_CFG;i++) {
+            
+            radio_rfOff();
+            
+            app_vars.pdu_len = prepare_freq_setting_pdu(cfg_course, cfg_mid, cfg_fine);
+            ble_prepare_packt(&app_vars.pdu[0], app_vars.pdu_len);
+            
+            LC_FREQCHANGE(cfg_course, cfg_mid, cfg_fine);
+            
+            delay_lc_setup();
+            
+            ble_load_tx_arb_fifo();
+            radio_txEnable();
+            
+            delay_tx();
+            
+            ble_txNow_tx_arb_fifo();
+            
+            // need to make sure the tx is done before 
+            // starting a new transmission
+            
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.sendDone = false;
+            while (app_vars.sendDone==false);
+        }
+        
+    }
 }

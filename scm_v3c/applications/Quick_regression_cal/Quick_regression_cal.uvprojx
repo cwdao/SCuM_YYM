@@ -10,7 +10,7 @@
       <TargetName>ble_freq_sweep</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
-      <pCCUsed>5060960::V5.06 update 7 (build 960)::.\ARMCC</pCCUsed>
+      <pCCUsed>5060960::V5.06 update 7 (build 960)::.\ARM_Compoler_5.06u7</pCCUsed>
       <uAC6>0</uAC6>
       <TargetOption>
         <TargetCommonOption>
@@ -49,7 +49,7 @@
             <InvalidFlash>1</InvalidFlash>
           </TargetStatus>
           <OutputDirectory>.\Objects\</OutputDirectory>
-          <OutputName>ble_freq_sweep</OutputName>
+          <OutputName>Quick_regression_cal</OutputName>
           <CreateExecutable>1</CreateExecutable>
           <CreateLib>0</CreateLib>
           <CreateHexFile>1</CreateHexFile>
@@ -82,8 +82,8 @@
           <AfterMake>
             <RunUserProg1>1</RunUserProg1>
             <RunUserProg2>1</RunUserProg2>
-            <UserProg1Name>fromelf --bin .\Objects\ble_freq_sweep.axf -o .\Objects\YM.bin</UserProg1Name>
-            <UserProg2Name>fromelf -cvf .\Objects\ble_freq_sweep.axf -o .\Objects\disasm.txt</UserProg2Name>
+            <UserProg1Name>fromelf --bin .\Objects\Quick_regression_cal.axf -o .\Objects\Quick_regression_cal.bin</UserProg1Name>
+            <UserProg2Name>fromelf -cvf .\Objects\Quick_regression_cal.axf -o .\Objects\disasm.txt</UserProg2Name>
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
             <nStopA1X>0</nStopA1X>
@@ -385,9 +385,9 @@
           <GroupName>app</GroupName>
           <Files>
             <File>
-              <FileName>YM.c</FileName>
+              <FileName>Quick_regression_cal.c</FileName>
               <FileType>1</FileType>
-              <FilePath>.\YM.c</FilePath>
+              <FilePath>.\Quick_regression_cal.c</FilePath>
             </File>
           </Files>
         </Group>

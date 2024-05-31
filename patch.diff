@@ -1,0 +1,1010 @@
+From 94a844da81ba7fa237adb2c51c3bd54abee80fcb Mon Sep 17 00:00:00 2001
+From: yiming yuan <yyuan861@connect.hkust-gz.edu.cn>
+Date: Fri, 31 May 2024 14:39:07 +0800
+Subject: [PATCH] #Yiming Quick Cal code - finished #Note: #1.still with
+ divider #2.just calibrate the RC oscillator at begining
+
+---
+ .../.vscode/c_cpp_properties.json             |  89 ++++
+ .../LCcount_freq_test/.vscode/uv4.log.lock    |   1 +
+ .../c_cpp_properties-IMON_HKUSTgz2-2.json     |   0
+ .../c_cpp_properties-IMON_HKUSTgz2-3.json     |   0
+ .../c_cpp_properties-IMON_HKUSTgz2-4.json     |   0
+ .../c_cpp_properties-IMON_HKUSTgz2-5.json     |   0
+ .../c_cpp_properties-IMON_HKUSTgz2-6.json     |   0
+ .../c_cpp_properties-IMON_HKUSTgz2-7.json     |   0
+ .../c_cpp_properties-IMON_HKUSTgz2-8.json     |   0
+ .../c_cpp_properties-IMON_HKUSTgz2-9.json}    |   0
+ .../c_cpp_properties-IMON_HKUSTgz2.json       |  89 ++++
+ .../c_cpp_properties-Imon_hkustgz-10.json}    |   0
+ .../c_cpp_properties-Imon_hkustgz-2.json}     |   0
+ .../c_cpp_properties-Imon_hkustgz-3.json}     |   0
+ .../c_cpp_properties-Imon_hkustgz-4.json}     |   0
+ .../c_cpp_properties-Imon_hkustgz-5.json}     |   0
+ .../c_cpp_properties-Imon_hkustgz-6.json}     |   0
+ .../c_cpp_properties-Imon_hkustgz-7.json}     |   0
+ .../c_cpp_properties-Imon_hkustgz-8.json}     |   0
+ .../c_cpp_properties-Imon_hkustgz-9.json}     |   0
+ .../c_cpp_properties-Imon_hkustgz.json        |   0
+ .../.vscode/c_cpp_properties.json             |  92 ++++
+ .../.vscode/uv4.log.lock                      |   0
+ .../Quick_regression_cal.c}                   |   0
+ .../Quick_regression_cal.uvoptx               | 440 ++++++++++++++++++
+ .../Quick_regression_cal.uvprojx}             |  12 +-
+ .../{YM => Quick_regression_cal}/YM.uvoptx    |   4 +-
+ .../ble_freq_sweep.uvoptx                     |   0
+ .../{YM => Quick_regression_cal}/test.py      |   0
+ scm_v3c/ble.c                                 |   2 +-
+ scm_v3c/optical.c                             |   1 +
+ scm_v3c/scm3c_hw_interface.c                  |   2 +-
+ 32 files changed, 722 insertions(+), 10 deletions(-)
+ create mode 100644 scm_v3c/applications/LCcount_freq_test/.vscode/c_cpp_properties.json
+ create mode 100644 scm_v3c/applications/LCcount_freq_test/.vscode/uv4.log.lock
+ rename scm_v3c/applications/{YM => Quick_regression_cal}/.vscode/c_cpp_properties-IMON_HKUSTgz2-2.json (100%)
+ rename scm_v3c/applications/{YM => Quick_regression_cal}/.vscode/c_cpp_properties-IMON_HKUSTgz2-3.json (100%)
+ rename scm_v3c/applications/{YM => Quick_regression_cal}/.vscode/c_cpp_properties-IMON_HKUSTgz2-4.json (100%)
+ rename scm_v3c/applications/{YM => Quick_regression_cal}/.vscode/c_cpp_properties-IMON_HKUSTgz2-5.json (100%)
+ rename scm_v3c/applications/{YM => Quick_regression_cal}/.vscode/c_cpp_properties-IMON_HKUSTgz2-6.json (100%)
+ rename scm_v3c/applications/{YM => Quick_regression_cal}/.vscode/c_cpp_properties-IMON_HKUSTgz2-7.json (100%)
+ rename scm_v3c/applications/{YM => Quick_regression_cal}/.vscode/c_cpp_properties-IMON_HKUSTgz2-8.json (100%)
+ rename scm_v3c/applications/{YM/.vscode/c_cpp_properties-IMON_HKUSTgz2.json => Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-9.json} (100%)
+ create mode 100644 scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2.json
+ rename scm_v3c/applications/{YM/.vscode/c_cpp_properties-Imon_hkustgz-2.json => Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-10.json} (100%)
+ rename scm_v3c/applications/{YM/.vscode/c_cpp_properties-Imon_hkustgz-3.json => Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-2.json} (100%)
+ rename scm_v3c/applications/{YM/.vscode/c_cpp_properties-Imon_hkustgz-4.json => Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-3.json} (100%)
+ rename scm_v3c/applications/{YM/.vscode/c_cpp_properties-Imon_hkustgz-5.json => Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-4.json} (100%)
+ rename scm_v3c/applications/{YM/.vscode/c_cpp_properties-Imon_hkustgz-6.json => Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-5.json} (100%)
+ rename scm_v3c/applications/{YM/.vscode/c_cpp_properties-Imon_hkustgz-7.json => Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-6.json} (100%)
+ rename scm_v3c/applications/{YM/.vscode/c_cpp_properties-Imon_hkustgz-8.json => Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-7.json} (100%)
+ rename scm_v3c/applications/{YM/.vscode/c_cpp_properties-Imon_hkustgz-9.json => Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-8.json} (100%)
+ rename scm_v3c/applications/{YM/.vscode/c_cpp_properties.json => Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-9.json} (100%)
+ rename scm_v3c/applications/{YM => Quick_regression_cal}/.vscode/c_cpp_properties-Imon_hkustgz.json (100%)
+ create mode 100644 scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties.json
+ rename scm_v3c/applications/{YM => Quick_regression_cal}/.vscode/uv4.log.lock (100%)
+ rename scm_v3c/applications/{YM/YM.c => Quick_regression_cal/Quick_regression_cal.c} (100%)
+ create mode 100644 scm_v3c/applications/Quick_regression_cal/Quick_regression_cal.uvoptx
+ rename scm_v3c/applications/{YM/YM.uvprojx => Quick_regression_cal/Quick_regression_cal.uvprojx} (97%)
+ rename scm_v3c/applications/{YM => Quick_regression_cal}/YM.uvoptx (98%)
+ rename scm_v3c/applications/{YM => Quick_regression_cal}/ble_freq_sweep.uvoptx (100%)
+ rename scm_v3c/applications/{YM => Quick_regression_cal}/test.py (100%)
+
+diff --git a/scm_v3c/applications/LCcount_freq_test/.vscode/c_cpp_properties.json b/scm_v3c/applications/LCcount_freq_test/.vscode/c_cpp_properties.json
+new file mode 100644
+index 0000000..8e207e5
+--- /dev/null
++++ b/scm_v3c/applications/LCcount_freq_test/.vscode/c_cpp_properties.json
+@@ -0,0 +1,89 @@
++{
++    "configurations": [
++        {
++            "name": "ble_freq_sweep",
++            "includePath": [
++                "d:\\OneDrive - HKUST (Guangzhou)\\SchoolTasks\\SCuMRobot\\SCuM_BLEorigin\\scum-test-code\\scm_v3c\\",
++                "D:\\Keil_v5\\ARM\\ARMCC\\include",
++                "d:\\OneDrive - HKUST (Guangzhou)\\SchoolTasks\\SCuMRobot\\SCuM_BLEorigin\\scum-test-code\\scm_v3c\\applications\\LCcount_freq_test",
++                "d:\\OneDrive - HKUST (Guangzhou)\\SchoolTasks\\SCuMRobot\\SCuM_BLEorigin\\scum-test-code\\scm_v3c"
++            ],
++            "defines": [
++                "__CC_ARM",
++                "__arm__",
++                "__align(x)=",
++                "__ALIGNOF__(x)=",
++                "__alignof__(x)=",
++                "__asm(x)=",
++                "__forceinline=",
++                "__restrict=",
++                "__global_reg(n)=",
++                "__inline=",
++                "__int64=long long",
++                "__INTADDR__(expr)=0",
++                "__irq=",
++                "__packed=",
++                "__pure=",
++                "__smc(n)=",
++                "__svc(n)=",
++                "__svc_indirect(n)=",
++                "__svc_indirect_r7(n)=",
++                "__value_in_regs=",
++                "__weak=",
++                "__writeonly=",
++                "__declspec(x)=",
++                "__attribute__(x)=",
++                "__nonnull__(x)=",
++                "__register=",
++                "__breakpoint(x)=",
++                "__cdp(x,y,z)=",
++                "__clrex()=",
++                "__clz(x)=0U",
++                "__current_pc()=0U",
++                "__current_sp()=0U",
++                "__disable_fiq()=",
++                "__disable_irq()=",
++                "__dmb(x)=",
++                "__dsb(x)=",
++                "__enable_fiq()=",
++                "__enable_irq()=",
++                "__fabs(x)=0.0",
++                "__fabsf(x)=0.0f",
++                "__force_loads()=",
++                "__force_stores()=",
++                "__isb(x)=",
++                "__ldrex(x)=0U",
++                "__ldrexd(x)=0U",
++                "__ldrt(x)=0U",
++                "__memory_changed()=",
++                "__nop()=",
++                "__pld(...)=",
++                "__pli(...)=",
++                "__qadd(x,y)=0",
++                "__qdbl(x)=0",
++                "__qsub(x,y)=0",
++                "__rbit(x)=0U",
++                "__rev(x)=0U",
++                "__return_address()=0U",
++                "__ror(x,y)=0U",
++                "__schedule_barrier()=",
++                "__semihost(x,y)=0",
++                "__sev()=",
++                "__sqrt(x)=0.0",
++                "__sqrtf(x)=0.0f",
++                "__ssat(x,y)=0",
++                "__strex(x,y)=0U",
++                "__strexd(x,y)=0",
++                "__strt(x,y)=",
++                "__swp(x,y)=0U",
++                "__usat(x,y)=0U",
++                "__wfe()=",
++                "__wfi()=",
++                "__yield()=",
++                "__vfp_status(x,y)=0"
++            ],
++            "intelliSenseMode": "${default}"
++        }
++    ],
++    "version": 4
++}
+\ No newline at end of file
+diff --git a/scm_v3c/applications/LCcount_freq_test/.vscode/uv4.log.lock b/scm_v3c/applications/LCcount_freq_test/.vscode/uv4.log.lock
+new file mode 100644
+index 0000000..f826613
+--- /dev/null
++++ b/scm_v3c/applications/LCcount_freq_test/.vscode/uv4.log.lock
+@@ -0,0 +1 @@
++2024/5/30 17:15:25
+\ No newline at end of file
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2-2.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-2.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2-2.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-2.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2-3.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-3.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2-3.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-3.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2-4.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-4.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2-4.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-4.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2-5.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-5.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2-5.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-5.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2-6.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-6.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2-6.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-6.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2-7.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-7.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2-7.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-7.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2-8.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-8.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2-8.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-8.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-9.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-IMON_HKUSTgz2.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2-9.json
+diff --git a/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2.json
+new file mode 100644
+index 0000000..a651eb0
+--- /dev/null
++++ b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-IMON_HKUSTgz2.json
+@@ -0,0 +1,89 @@
++{
++    "configurations": [
++        {
++            "name": "ble_freq_sweep",
++            "includePath": [
++                "d:\\OneDrive - HKUST (Guangzhou)\\SchoolTasks\\SCuMRobot\\SCuM_BLEorigin\\scum-test-code\\scm_v3c\\",
++                "D:\\Keil_v5\\ARM\\ARMCC\\include",
++                "d:\\OneDrive - HKUST (Guangzhou)\\SchoolTasks\\SCuMRobot\\SCuM_BLEorigin\\scum-test-code\\scm_v3c\\applications\\YM",
++                "d:\\OneDrive - HKUST (Guangzhou)\\SchoolTasks\\SCuMRobot\\SCuM_BLEorigin\\scum-test-code\\scm_v3c"
++            ],
++            "defines": [
++                "__CC_ARM",
++                "__arm__",
++                "__align(x)=",
++                "__ALIGNOF__(x)=",
++                "__alignof__(x)=",
++                "__asm(x)=",
++                "__forceinline=",
++                "__restrict=",
++                "__global_reg(n)=",
++                "__inline=",
++                "__int64=long long",
++                "__INTADDR__(expr)=0",
++                "__irq=",
++                "__packed=",
++                "__pure=",
++                "__smc(n)=",
++                "__svc(n)=",
++                "__svc_indirect(n)=",
++                "__svc_indirect_r7(n)=",
++                "__value_in_regs=",
++                "__weak=",
++                "__writeonly=",
++                "__declspec(x)=",
++                "__attribute__(x)=",
++                "__nonnull__(x)=",
++                "__register=",
++                "__breakpoint(x)=",
++                "__cdp(x,y,z)=",
++                "__clrex()=",
++                "__clz(x)=0U",
++                "__current_pc()=0U",
++                "__current_sp()=0U",
++                "__disable_fiq()=",
++                "__disable_irq()=",
++                "__dmb(x)=",
++                "__dsb(x)=",
++                "__enable_fiq()=",
++                "__enable_irq()=",
++                "__fabs(x)=0.0",
++                "__fabsf(x)=0.0f",
++                "__force_loads()=",
++                "__force_stores()=",
++                "__isb(x)=",
++                "__ldrex(x)=0U",
++                "__ldrexd(x)=0U",
++                "__ldrt(x)=0U",
++                "__memory_changed()=",
++                "__nop()=",
++                "__pld(...)=",
++                "__pli(...)=",
++                "__qadd(x,y)=0",
++                "__qdbl(x)=0",
++                "__qsub(x,y)=0",
++                "__rbit(x)=0U",
++                "__rev(x)=0U",
++                "__return_address()=0U",
++                "__ror(x,y)=0U",
++                "__schedule_barrier()=",
++                "__semihost(x,y)=0",
++                "__sev()=",
++                "__sqrt(x)=0.0",
++                "__sqrtf(x)=0.0f",
++                "__ssat(x,y)=0",
++                "__strex(x,y)=0U",
++                "__strexd(x,y)=0",
++                "__strt(x,y)=",
++                "__swp(x,y)=0U",
++                "__usat(x,y)=0U",
++                "__wfe()=",
++                "__wfi()=",
++                "__yield()=",
++                "__vfp_status(x,y)=0"
++            ],
++            "intelliSenseMode": "${default}"
++        }
++    ],
++    "version": 4
++}
+\ No newline at end of file
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-2.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-10.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-2.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-10.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-3.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-2.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-3.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-2.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-4.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-3.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-4.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-3.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-5.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-4.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-5.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-4.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-6.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-5.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-6.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-5.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-7.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-6.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-7.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-6.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-8.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-7.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-8.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-7.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-9.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-8.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz-9.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-8.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-9.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz-9.json
+diff --git a/scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz.json
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/c_cpp_properties-Imon_hkustgz.json
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties-Imon_hkustgz.json
+diff --git a/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties.json b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties.json
+new file mode 100644
+index 0000000..d7b51b8
+--- /dev/null
++++ b/scm_v3c/applications/Quick_regression_cal/.vscode/c_cpp_properties.json
+@@ -0,0 +1,92 @@
++{
++    "configurations": [
++        {
++            "name": "ble_freq_sweep",
++            "includePath": [
++                "d:\\OneDrive - HKUST (Guangzhou)\\SchoolTasks\\SCuMRobot\\SCuM_BLEorigin\\scum-test-code\\scm_v3c\\",
++                "D:\\Keil_v5\\ARM\\ARMCC\\include",
++                "D:\\Keil_v5\\ARM\\ARMCC\\include\\arm_linux",
++                "D:\\Keil_v5\\ARM\\ARMCC\\include\\arm_linux_compat",
++                "D:\\Keil_v5\\ARM\\ARMCC\\include\\rw",
++                "d:\\OneDrive - HKUST (Guangzhou)\\SchoolTasks\\SCuMRobot\\SCuM_BLEorigin\\scum-test-code\\scm_v3c\\applications\\YM",
++                "d:\\OneDrive - HKUST (Guangzhou)\\SchoolTasks\\SCuMRobot\\SCuM_BLEorigin\\scum-test-code\\scm_v3c"
++            ],
++            "defines": [
++                "__CC_ARM",
++                "__arm__",
++                "__align(x)=",
++                "__ALIGNOF__(x)=",
++                "__alignof__(x)=",
++                "__asm(x)=",
++                "__forceinline=",
++                "__restrict=",
++                "__global_reg(n)=",
++                "__inline=",
++                "__int64=long long",
++                "__INTADDR__(expr)=0",
++                "__irq=",
++                "__packed=",
++                "__pure=",
++                "__smc(n)=",
++                "__svc(n)=",
++                "__svc_indirect(n)=",
++                "__svc_indirect_r7(n)=",
++                "__value_in_regs=",
++                "__weak=",
++                "__writeonly=",
++                "__declspec(x)=",
++                "__attribute__(x)=",
++                "__nonnull__(x)=",
++                "__register=",
++                "__breakpoint(x)=",
++                "__cdp(x,y,z)=",
++                "__clrex()=",
++                "__clz(x)=0U",
++                "__current_pc()=0U",
++                "__current_sp()=0U",
++                "__disable_fiq()=",
++                "__disable_irq()=",
++                "__dmb(x)=",
++                "__dsb(x)=",
++                "__enable_fiq()=",
++                "__enable_irq()=",
++                "__fabs(x)=0.0",
++                "__fabsf(x)=0.0f",
++                "__force_loads()=",
++                "__force_stores()=",
++                "__isb(x)=",
++                "__ldrex(x)=0U",
++                "__ldrexd(x)=0U",
++                "__ldrt(x)=0U",
++                "__memory_changed()=",
++                "__nop()=",
++                "__pld(...)=",
++                "__pli(...)=",
++                "__qadd(x,y)=0",
++                "__qdbl(x)=0",
++                "__qsub(x,y)=0",
++                "__rbit(x)=0U",
++                "__rev(x)=0U",
++                "__return_address()=0U",
++                "__ror(x,y)=0U",
++                "__schedule_barrier()=",
++                "__semihost(x,y)=0",
++                "__sev()=",
++                "__sqrt(x)=0.0",
++                "__sqrtf(x)=0.0f",
++                "__ssat(x,y)=0",
++                "__strex(x,y)=0U",
++                "__strexd(x,y)=0",
++                "__strt(x,y)=",
++                "__swp(x,y)=0U",
++                "__usat(x,y)=0U",
++                "__wfe()=",
++                "__wfi()=",
++                "__yield()=",
++                "__vfp_status(x,y)=0"
++            ],
++            "intelliSenseMode": "${default}"
++        }
++    ],
++    "version": 4
++}
+\ No newline at end of file
+diff --git a/scm_v3c/applications/YM/.vscode/uv4.log.lock b/scm_v3c/applications/Quick_regression_cal/.vscode/uv4.log.lock
+similarity index 100%
+rename from scm_v3c/applications/YM/.vscode/uv4.log.lock
+rename to scm_v3c/applications/Quick_regression_cal/.vscode/uv4.log.lock
+diff --git a/scm_v3c/applications/YM/YM.c b/scm_v3c/applications/Quick_regression_cal/Quick_regression_cal.c
+similarity index 100%
+rename from scm_v3c/applications/YM/YM.c
+rename to scm_v3c/applications/Quick_regression_cal/Quick_regression_cal.c
+diff --git a/scm_v3c/applications/Quick_regression_cal/Quick_regression_cal.uvoptx b/scm_v3c/applications/Quick_regression_cal/Quick_regression_cal.uvoptx
+new file mode 100644
+index 0000000..1ee7d71
+--- /dev/null
++++ b/scm_v3c/applications/Quick_regression_cal/Quick_regression_cal.uvoptx
+@@ -0,0 +1,440 @@
++<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
++<ProjectOpt xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="project_optx.xsd">
++
++  <SchemaVersion>1.0</SchemaVersion>
++
++  <Header>### uVision Project, (C) Keil Software</Header>
++
++  <Extensions>
++    <cExt>*.c</cExt>
++    <aExt>*.s*; *.src; *.a*</aExt>
++    <oExt>*.obj; *.o</oExt>
++    <lExt>*.lib</lExt>
++    <tExt>*.txt; *.h; *.inc; *.md</tExt>
++    <pExt>*.plm</pExt>
++    <CppX>*.cpp; *.cc; *.cxx</CppX>
++    <nMigrate>0</nMigrate>
++  </Extensions>
++
++  <DaveTm>
++    <dwLowDateTime>0</dwLowDateTime>
++    <dwHighDateTime>0</dwHighDateTime>
++  </DaveTm>
++
++  <Target>
++    <TargetName>ble_freq_sweep</TargetName>
++    <ToolsetNumber>0x4</ToolsetNumber>
++    <ToolsetName>ARM-ADS</ToolsetName>
++    <TargetOption>
++      <CLKADS>10000000</CLKADS>
++      <OPTTT>
++        <gFlags>0</gFlags>
++        <BeepAtEnd>1</BeepAtEnd>
++        <RunSim>0</RunSim>
++        <RunTarget>1</RunTarget>
++        <RunAbUc>0</RunAbUc>
++      </OPTTT>
++      <OPTHX>
++        <HexSelection>1</HexSelection>
++        <FlashByte>65535</FlashByte>
++        <HexRangeLowAddress>0</HexRangeLowAddress>
++        <HexRangeHighAddress>0</HexRangeHighAddress>
++        <HexOffset>0</HexOffset>
++      </OPTHX>
++      <OPTLEX>
++        <PageWidth>79</PageWidth>
++        <PageLength>66</PageLength>
++        <TabStop>8</TabStop>
++        <ListingPath>.\Listings\</ListingPath>
++      </OPTLEX>
++      <ListingPage>
++        <CreateCListing>1</CreateCListing>
++        <CreateAListing>1</CreateAListing>
++        <CreateLListing>1</CreateLListing>
++        <CreateIListing>0</CreateIListing>
++        <AsmCond>1</AsmCond>
++        <AsmSymb>1</AsmSymb>
++        <AsmXref>0</AsmXref>
++        <CCond>1</CCond>
++        <CCode>0</CCode>
++        <CListInc>0</CListInc>
++        <CSymb>0</CSymb>
++        <LinkerCodeListing>0</LinkerCodeListing>
++      </ListingPage>
++      <OPTXL>
++        <LMap>1</LMap>
++        <LComments>1</LComments>
++        <LGenerateSymbols>1</LGenerateSymbols>
++        <LLibSym>1</LLibSym>
++        <LLines>1</LLines>
++        <LLocSym>1</LLocSym>
++        <LPubSym>1</LPubSym>
++        <LXref>0</LXref>
++        <LExpSel>0</LExpSel>
++      </OPTXL>
++      <OPTFL>
++        <tvExp>1</tvExp>
++        <tvExpOptDlg>0</tvExpOptDlg>
++        <IsCurrentTarget>1</IsCurrentTarget>
++      </OPTFL>
++      <CpuCode>0</CpuCode>
++      <DebugOpt>
++        <uSim>0</uSim>
++        <uTrg>1</uTrg>
++        <sLdApp>1</sLdApp>
++        <sGomain>1</sGomain>
++        <sRbreak>1</sRbreak>
++        <sRwatch>1</sRwatch>
++        <sRmem>1</sRmem>
++        <sRfunc>1</sRfunc>
++        <sRbox>1</sRbox>
++        <tLdApp>1</tLdApp>
++        <tGomain>1</tGomain>
++        <tRbreak>1</tRbreak>
++        <tRwatch>1</tRwatch>
++        <tRmem>1</tRmem>
++        <tRfunc>0</tRfunc>
++        <tRbox>1</tRbox>
++        <tRtrace>1</tRtrace>
++        <sRSysVw>1</sRSysVw>
++        <tRSysVw>1</tRSysVw>
++        <sRunDeb>0</sRunDeb>
++        <sLrtime>0</sLrtime>
++        <bEvRecOn>1</bEvRecOn>
++        <bSchkAxf>0</bSchkAxf>
++        <bTchkAxf>0</bTchkAxf>
++        <nTsel>0</nTsel>
++        <sDll></sDll>
++        <sDllPa></sDllPa>
++        <sDlgDll></sDlgDll>
++        <sDlgPa></sDlgPa>
++        <sIfile></sIfile>
++        <tDll></tDll>
++        <tDllPa></tDllPa>
++        <tDlgDll></tDlgDll>
++        <tDlgPa></tDlgPa>
++        <tIfile></tIfile>
++        <pMon>BIN\UL2CM3.DLL</pMon>
++      </DebugOpt>
++      <TargetDriverDllRegistry>
++        <SetRegEntry>
++          <Number>0</Number>
++          <Key>UL2CM3</Key>
++          <Name>UL2CM3(-S0 -C0 -P0 -FD20000000 -FC1000)</Name>
++        </SetRegEntry>
++      </TargetDriverDllRegistry>
++      <Breakpoint/>
++      <Tracepoint>
++        <THDelay>0</THDelay>
++      </Tracepoint>
++      <DebugFlag>
++        <trace>0</trace>
++        <periodic>0</periodic>
++        <aLwin>0</aLwin>
++        <aCover>0</aCover>
++        <aSer1>0</aSer1>
++        <aSer2>0</aSer2>
++        <aPa>0</aPa>
++        <viewmode>0</viewmode>
++        <vrSel>0</vrSel>
++        <aSym>0</aSym>
++        <aTbox>0</aTbox>
++        <AscS1>0</AscS1>
++        <AscS2>0</AscS2>
++        <AscS3>0</AscS3>
++        <aSer3>0</aSer3>
++        <eProf>0</eProf>
++        <aLa>0</aLa>
++        <aPa1>0</aPa1>
++        <AscS4>0</AscS4>
++        <aSer4>0</aSer4>
++        <StkLoc>0</StkLoc>
++        <TrcWin>0</TrcWin>
++        <newCpu>0</newCpu>
++        <uProt>0</uProt>
++      </DebugFlag>
++      <LintExecutable></LintExecutable>
++      <LintConfigFile></LintConfigFile>
++      <bLintAuto>0</bLintAuto>
++      <bAutoGenD>0</bAutoGenD>
++      <LntExFlags>0</LntExFlags>
++      <pMisraName></pMisraName>
++      <pszMrule></pszMrule>
++      <pSingCmds></pSingCmds>
++      <pMultCmds></pMultCmds>
++      <pMisraNamep></pMisraNamep>
++      <pszMrulep></pszMrulep>
++      <pSingCmdsp></pSingCmdsp>
++      <pMultCmdsp></pMultCmdsp>
++    </TargetOption>
++  </Target>
++
++  <Group>
++    <GroupName>app</GroupName>
++    <tvExp>1</tvExp>
++    <tvExpOptDlg>0</tvExpOptDlg>
++    <cbSel>0</cbSel>
++    <RteFlg>0</RteFlg>
++    <File>
++      <GroupNumber>1</GroupNumber>
++      <FileNumber>1</FileNumber>
++      <FileType>1</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>.\Quick_regression_cal.c</PathWithFileName>
++      <FilenameWithoutPath>Quick_regression_cal.c</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++  </Group>
++
++  <Group>
++    <GroupName>drv</GroupName>
++    <tvExp>0</tvExp>
++    <tvExpOptDlg>0</tvExpOptDlg>
++    <cbSel>0</cbSel>
++    <RteFlg>0</RteFlg>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>2</FileNumber>
++      <FileType>2</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\cm0dsasm.s</PathWithFileName>
++      <FilenameWithoutPath>cm0dsasm.s</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>3</FileNumber>
++      <FileType>5</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\Memory_Map.h</PathWithFileName>
++      <FilenameWithoutPath>Memory_Map.h</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>4</FileNumber>
++      <FileType>1</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\retarget.c</PathWithFileName>
++      <FilenameWithoutPath>retarget.c</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>5</FileNumber>
++      <FileType>1</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\optical.c</PathWithFileName>
++      <FilenameWithoutPath>optical.c</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>6</FileNumber>
++      <FileType>5</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\optical.h</PathWithFileName>
++      <FilenameWithoutPath>optical.h</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>7</FileNumber>
++      <FileType>1</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\radio.c</PathWithFileName>
++      <FilenameWithoutPath>radio.c</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>8</FileNumber>
++      <FileType>5</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\radio.h</PathWithFileName>
++      <FilenameWithoutPath>radio.h</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>9</FileNumber>
++      <FileType>1</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\adc.c</PathWithFileName>
++      <FilenameWithoutPath>adc.c</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>10</FileNumber>
++      <FileType>5</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\adc.h</PathWithFileName>
++      <FilenameWithoutPath>adc.h</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>11</FileNumber>
++      <FileType>1</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\gpio.c</PathWithFileName>
++      <FilenameWithoutPath>gpio.c</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>12</FileNumber>
++      <FileType>5</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\gpio.h</PathWithFileName>
++      <FilenameWithoutPath>gpio.h</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>13</FileNumber>
++      <FileType>1</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\uart.c</PathWithFileName>
++      <FilenameWithoutPath>uart.c</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>14</FileNumber>
++      <FileType>5</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\uart.h</PathWithFileName>
++      <FilenameWithoutPath>uart.h</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>15</FileNumber>
++      <FileType>1</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\rftimer.c</PathWithFileName>
++      <FilenameWithoutPath>rftimer.c</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>16</FileNumber>
++      <FileType>5</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\rftimer.h</PathWithFileName>
++      <FilenameWithoutPath>rftimer.h</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>17</FileNumber>
++      <FileType>5</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\scum_defs.h</PathWithFileName>
++      <FilenameWithoutPath>scum_defs.h</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>18</FileNumber>
++      <FileType>5</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\scm3c_hw_interface.h</PathWithFileName>
++      <FilenameWithoutPath>scm3c_hw_interface.h</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>19</FileNumber>
++      <FileType>1</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\scm3c_hw_interface.c</PathWithFileName>
++      <FilenameWithoutPath>scm3c_hw_interface.c</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>20</FileNumber>
++      <FileType>1</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\ble.c</PathWithFileName>
++      <FilenameWithoutPath>ble.c</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++    <File>
++      <GroupNumber>2</GroupNumber>
++      <FileNumber>21</FileNumber>
++      <FileType>5</FileType>
++      <tvExp>0</tvExp>
++      <tvExpOptDlg>0</tvExpOptDlg>
++      <bDave2>0</bDave2>
++      <PathWithFileName>..\..\ble.h</PathWithFileName>
++      <FilenameWithoutPath>ble.h</FilenameWithoutPath>
++      <RteFlg>0</RteFlg>
++      <bShared>0</bShared>
++    </File>
++  </Group>
++
++</ProjectOpt>
+diff --git a/scm_v3c/applications/YM/YM.uvprojx b/scm_v3c/applications/Quick_regression_cal/Quick_regression_cal.uvprojx
+similarity index 97%
+rename from scm_v3c/applications/YM/YM.uvprojx
+rename to scm_v3c/applications/Quick_regression_cal/Quick_regression_cal.uvprojx
+index ce5e2ed..f5a37fb 100644
+--- a/scm_v3c/applications/YM/YM.uvprojx
++++ b/scm_v3c/applications/Quick_regression_cal/Quick_regression_cal.uvprojx
+@@ -10,7 +10,7 @@
+       <TargetName>ble_freq_sweep</TargetName>
+       <ToolsetNumber>0x4</ToolsetNumber>
+       <ToolsetName>ARM-ADS</ToolsetName>
+-      <pCCUsed>5060960::V5.06 update 7 (build 960)::.\ARMCC</pCCUsed>
++      <pCCUsed>5060960::V5.06 update 7 (build 960)::.\ARM_Compoler_5.06u7</pCCUsed>
+       <uAC6>0</uAC6>
+       <TargetOption>
+         <TargetCommonOption>
+@@ -49,7 +49,7 @@
+             <InvalidFlash>1</InvalidFlash>
+           </TargetStatus>
+           <OutputDirectory>.\Objects\</OutputDirectory>
+-          <OutputName>ble_freq_sweep</OutputName>
++          <OutputName>Quick_regression_cal</OutputName>
+           <CreateExecutable>1</CreateExecutable>
+           <CreateLib>0</CreateLib>
+           <CreateHexFile>1</CreateHexFile>
+@@ -82,8 +82,8 @@
+           <AfterMake>
+             <RunUserProg1>1</RunUserProg1>
+             <RunUserProg2>1</RunUserProg2>
+-            <UserProg1Name>fromelf --bin .\Objects\ble_freq_sweep.axf -o .\Objects\YM.bin</UserProg1Name>
+-            <UserProg2Name>fromelf -cvf .\Objects\ble_freq_sweep.axf -o .\Objects\disasm.txt</UserProg2Name>
++            <UserProg1Name>fromelf --bin .\Objects\Quick_regression_cal.axf -o .\Objects\Quick_regression_cal.bin</UserProg1Name>
++            <UserProg2Name>fromelf -cvf .\Objects\Quick_regression_cal.axf -o .\Objects\disasm.txt</UserProg2Name>
+             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
+             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
+             <nStopA1X>0</nStopA1X>
+@@ -385,9 +385,9 @@
+           <GroupName>app</GroupName>
+           <Files>
+             <File>
+-              <FileName>YM.c</FileName>
++              <FileName>Quick_regression_cal.c</FileName>
+               <FileType>1</FileType>
+-              <FilePath>.\YM.c</FilePath>
++              <FilePath>.\Quick_regression_cal.c</FilePath>
+             </File>
+           </Files>
+         </Group>
+diff --git a/scm_v3c/applications/YM/YM.uvoptx b/scm_v3c/applications/Quick_regression_cal/YM.uvoptx
+similarity index 98%
+rename from scm_v3c/applications/YM/YM.uvoptx
+rename to scm_v3c/applications/Quick_regression_cal/YM.uvoptx
+index 520f9d6..0c8e809 100644
+--- a/scm_v3c/applications/YM/YM.uvoptx
++++ b/scm_v3c/applications/Quick_regression_cal/YM.uvoptx
+@@ -182,8 +182,8 @@
+       <tvExp>0</tvExp>
+       <tvExpOptDlg>0</tvExpOptDlg>
+       <bDave2>0</bDave2>
+-      <PathWithFileName>.\YM.c</PathWithFileName>
+-      <FilenameWithoutPath>YM.c</FilenameWithoutPath>
++      <PathWithFileName>.\Quick_regression_cal.c</PathWithFileName>
++      <FilenameWithoutPath>Quick_regression_cal.c</FilenameWithoutPath>
+       <RteFlg>0</RteFlg>
+       <bShared>0</bShared>
+     </File>
+diff --git a/scm_v3c/applications/YM/ble_freq_sweep.uvoptx b/scm_v3c/applications/Quick_regression_cal/ble_freq_sweep.uvoptx
+similarity index 100%
+rename from scm_v3c/applications/YM/ble_freq_sweep.uvoptx
+rename to scm_v3c/applications/Quick_regression_cal/ble_freq_sweep.uvoptx
+diff --git a/scm_v3c/applications/YM/test.py b/scm_v3c/applications/Quick_regression_cal/test.py
+similarity index 100%
+rename from scm_v3c/applications/YM/test.py
+rename to scm_v3c/applications/Quick_regression_cal/test.py
+diff --git a/scm_v3c/ble.c b/scm_v3c/ble.c
+index 924fb92..6757c77 100644
+--- a/scm_v3c/ble.c
++++ b/scm_v3c/ble.c
+@@ -58,7 +58,7 @@ void ble_init(void) {
+     ble_vars.AdvA[5] = 0xCC;
+ 
+     // Set default channel.
+-    ble_vars.channel = 36;
++    ble_vars.channel = 0;
+ 
+     // Set default name.
+     ble_vars.name_tx_en = true;
+diff --git a/scm_v3c/optical.c b/scm_v3c/optical.c
+index 20a8b73..4ae11d7 100644
+--- a/scm_v3c/optical.c
++++ b/scm_v3c/optical.c
+@@ -233,6 +233,7 @@ void optical_sfd_isr(){
+         scm3c_hw_interface_set_HF_CLOCK_coarse(HF_CLOCK_coarse);
+         scm3c_hw_interface_set_HF_CLOCK_fine(HF_CLOCK_fine);
+ 
++        optical_vars.optical_LC_cal_finished = 1;
+         // Do correction on LC
+         if (
+             optical_vars.optical_LC_cal_enable  &&
+diff --git a/scm_v3c/scm3c_hw_interface.c b/scm_v3c/scm3c_hw_interface.c
+index 4ac4d08..faa151d 100644
+--- a/scm_v3c/scm3c_hw_interface.c
++++ b/scm_v3c/scm3c_hw_interface.c
+@@ -1013,7 +1013,7 @@ void radio_init_divider(unsigned int div_value){
+     //set_asc_bit(1033);
+     
+     // set divider to div-by-480
+-    divProgram(48,1,1);
++    divProgram(480,1,1);
+     
+     // Set sel12 = 1 (choose whether x2 is active)
+     // Want this set to 1 or else the divider output falling edges will be messed up
+-- 
+2.42.0.windows.2
+

@@ -233,6 +233,7 @@ void optical_sfd_isr(){
         scm3c_hw_interface_set_HF_CLOCK_coarse(HF_CLOCK_coarse);
         scm3c_hw_interface_set_HF_CLOCK_fine(HF_CLOCK_fine);
 
+        optical_vars.optical_LC_cal_finished = 1;
         // Do correction on LC
         if (
             optical_vars.optical_LC_cal_enable  &&
