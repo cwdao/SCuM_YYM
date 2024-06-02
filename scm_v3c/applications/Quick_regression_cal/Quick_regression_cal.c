@@ -21,7 +21,7 @@
 
 #define TXPOWER             0xD8    // used for ibeacon pkt
 
-#define NUMPKT_PER_CFG      100
+#define NUMPKT_PER_CFG      10
 #define STEPS_PER_CONFIG    32
 #define TIMER_PERIOD        500  // 500 = 1ms@500kHz
 #define TIMER_PERIOD_BLE    2000
@@ -40,21 +40,21 @@
 //=========================== variables =======================================
 
 typedef struct {
-                    uint8_t         tx_coarse_p1;
-                    uint8_t         tx_mid_p1;
-                    uint8_t         tx_fine_p1;
-                    uint8_t         tx_coarse_p2;
-                    uint8_t         tx_mid_p2;
-                    uint8_t         tx_fine_p2;
+                    uint8_t                 tx_coarse_p1;
+                    uint8_t                 tx_mid_p1;
+                    uint8_t                 tx_fine_p1;
+                    uint8_t                 tx_coarse_p2;
+                    uint8_t                 tx_mid_p2;
+                    uint8_t                 tx_fine_p2;
                     //record the cb_timer num to compensite 4ms for ble transmitte
-                    uint8_t			cb_timer_num;
-        volatile    uint8_t         sample_index;
-                    uint32_t        samples[NUM_SAMPLES];
+                    uint8_t			        cb_timer_num;
+        volatile    uint8_t                 sample_index;
+                    uint32_t                samples[NUM_SAMPLES];
 
-                    bool            sendDone;
+                    bool                    sendDone;
                     
-                    uint8_t         pdu[PDU_LENGTH+CRC_LENGTH]; // protocol data unit
-                    uint8_t         pdu_len;
+                    uint8_t                 pdu[PDU_LENGTH+CRC_LENGTH]; // protocol data unit
+                    uint8_t                 pdu_len;
                 
                     uint32_t 				avg_sample;
                     uint32_t 				count_2M;
@@ -65,7 +65,9 @@ typedef struct {
                     bool                    calculate_flag;             //give time for calculating
                     uint16_t 				calculate_times_flag;       //give time for calculating
                     bool                    RC_count_flag;
-                    bool                    freq_setFinish_flag2;        //flag of finish estimate setting
+                    //open issue: the algorithm for below parameter =================================================================
+                    bool                    statusFlag;                 //flag of finish estimate setting, 1: finish, 0: not finish in setting
+                    bool                    roughEstimateRequireFlag;
 
                     int 				    RC_count;                    //count the number of 2M
                     double                  Comp_coff;
@@ -73,12 +75,17 @@ typedef struct {
                     //to decrease the time, save the rough estimate parameter
                     double                  para_matrix[2][1];
                     double                  Inv_equ_c;  
+                    //for channel hopping
+                    bool                    channelHopFlag;             //flag of enable channel hopping
+                    bool                    channelHopRequest;          //flag of request channel hopping
+                    uint8_t                 channelHopIndex;            //index of channel hopping sequence
 } app_vars_t;
 
 app_vars_t app_vars;
 
 double freqTargetList[40] = {1.252, 1.253, 1.254, 1.255, 1.256, 1.257, 1.258, 1.259, 1.260, 1.261, 1.263, 1.265, 1.266, 1.267, 1.268, 1.269, 1.270, 1.271, 1.272, 1.273, 1.274, 1.275, 1.276, 1.277, 1.278, 1.279, 1.280, 1.281, 1.282, 1.283, 1.284, 1.285, 1.286, 1.288, 1.289, 1.290, 1.291, 1.251, 1.264, 1.292};
 
+uint16_t channelHopSequence[3] = {0, 18, 36};
 
 //=========================== prototypes ======================================
 
@@ -92,8 +99,9 @@ void        course_estimate(uint16_t channelTarget);
 void        Gaussian_elimination(int x_matrix_raw[2][2], double x_matrix_inverse[2][2]);
 void        matrixMultiplication(double x_matrix_inverse[][2], int y_matrix[][1], double para_matrix[][1]);
 void        Solve_Equation(double para_matrix[][1], double Inv_equ_c, double x_matrix_inverse[][2]);
-void         __TransmitPacket (uint16_t channelTarget);
-void        __PresiseEstimate(void);
+void        __TransmitPacket (uint16_t channelTarget);
+void        __PresiseEstimate(uint16_t channelTarget);
+uint16_t    __ChannelHop(void);
 
 //=========================== main ============================================
 
@@ -159,11 +167,15 @@ int main(void) {
 	radio_txEnable();
     
     //set a initial channel
-    channelTarget = CHANNEL;
+    channelTarget = channelHopSequence[app_vars.channelHopIndex];
+    //open issue================================================
+    app_vars.roughEstimateRequireFlag = 1;
 
     while (1) {
         
         __TransmitPacket(channelTarget);
+        channelTarget = __ChannelHop();
+        printf("start channel hopping, target is %d\r\n",channelTarget);
 
     }
 }
@@ -194,7 +206,7 @@ uint32_t     average_sample(void){
 //Date: 31.May.2024
 /*************************/
 void cb_timer(void) {
-    if(app_vars.freq_setFinish_flag2 == 0){
+    if(app_vars.statusFlag == 0){
         rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
         read_counters_3B(&app_vars.count_2M,&app_vars.count_LC,&app_vars.count_adc);
         if (app_vars.RC_count_flag==0)
@@ -239,7 +251,7 @@ void cb_timer(void) {
             }
         }
     }
-    else if (app_vars.freq_setFinish_flag2 == 1)
+    else if (app_vars.statusFlag == 1)
     {
         app_vars.sendDone = true;
     }
@@ -346,10 +358,8 @@ void course_estimate(uint16_t channelTarget){
     // Comp_coff = Inv_equ_c/ 2000;
 
     //这一步为什么算不出来 直接赋值就可以算出来？
-    app_vars.Comp_coff = freqTargetList[channelTarget];
+    // app_vars.Comp_coff = freqTargetList[channelTarget];
     // printf("coff=%f\r\n",app_vars.Comp_coff);
-    app_vars.freq_abs = (int)(freqTargetList[channelTarget]*app_vars.RC_count);
-    printf("freq=%d\r\n",app_vars.freq_abs);
     printf("RC=%d\r\n",app_vars.RC_count);
 
     p1y = (p1L_count + p1R_count)/2;
@@ -392,13 +402,15 @@ void course_estimate(uint16_t channelTarget){
     app_vars.para_matrix[1][0] = para_matrix[1][0];
 }
 
-void __PresiseEstimate(void){
+void __PresiseEstimate(uint16_t channelTarget){
     int p1L_count, p1R_count, p2L_count, p2R_count, p3L_count, p3R_count;
     int p1x, p1y, p2x, p2y, p3x, p3y;
     double x_matrix_inverse[2][2];
     double assistMatrix[2][1];  //assist calculating, sometime directive calculating will stuck
     
     printf("begin precise stimate\r\n");
+    app_vars.freq_abs = (int)(freqTargetList[channelTarget]*app_vars.RC_count);
+    printf("freq=%d\r\n",app_vars.freq_abs);
     Solve_Equation(app_vars.para_matrix, app_vars.Inv_equ_c,x_matrix_inverse);
     //开始分区，p1L_count, p1R_count, p2L_count, p2R_count, p3L_count, p3R_count释放，帮助计算
     if ((int)x_matrix_inverse[0][0]%10 <=5)
@@ -587,7 +599,7 @@ void __PresiseEstimate(void){
     app_vars.tx_fine_p1 = p1y;
     app_vars.tx_mid_p2 = p2x;
     app_vars.tx_fine_p2 = p2y;
-    app_vars.freq_setFinish_flag2 = 1;
+    app_vars.statusFlag = 1;
     
 }
 
@@ -708,9 +720,17 @@ void __TransmitPacket (uint16_t channelTarget){
     uint8_t cfg_mid;
     int cfg_fine;
 
+    //reseved function
+    app_vars.channelHopRequest = 1;
+    app_vars.channelHopFlag = 0;
+
+    if(app_vars.roughEstimateRequireFlag == 1){
+        course_estimate(channelTarget);
+    }
+    
+    
     ble_set_channel(channelTarget);
-	course_estimate(channelTarget);
-    __PresiseEstimate();
+    __PresiseEstimate(channelTarget);
 
     //p1
     cfg_course = app_vars.tx_coarse_p1;
@@ -800,4 +820,32 @@ void __TransmitPacket (uint16_t channelTarget){
         }
         
     }
+    //when finsih 1 time precise estimate and finished the transmit process, set the channelHopFlag to 1
+    app_vars.channelHopFlag = 1;
+    //if channelHopRequest is 1, means need to do the channel hopping, the StatusFlag need back to 0
+    if (app_vars.channelHopRequest == 1)
+    {
+        app_vars.statusFlag = 0;
+    }
+    
+}
+
+/**************************/
+//Function: For channel hop process determain the frequency of the channel
+//Parameter: channelTarget and channelHopFlag, channelHopRequest. The channelHopRequest is maintained to determine whether the channel need to hopping.
+//Return: channelTarget
+//Call: main 
+//Date: 2.June.2024
+/*************************/
+uint16_t __ChannelHop(void){
+    uint16_t channelTarget;
+
+    app_vars.roughEstimateRequireFlag = 0;
+    if (app_vars.channelHopFlag && app_vars.channelHopRequest == 1)
+    {
+        app_vars.channelHopIndex += 1;
+        channelTarget = channelHopSequence[app_vars.channelHopIndex];    
+        app_vars.channelHopRequest = 0;
+    }
+    return  channelTarget;
 }
