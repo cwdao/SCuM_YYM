@@ -21,7 +21,7 @@
 
 #define TXPOWER             0xD8    // used for ibeacon pkt
 
-#define NUMPKT_PER_CFG      10
+#define NUMPKT_PER_CFG      100
 #define STEPS_PER_CONFIG    32
 #define TIMER_PERIOD        500  // 500 = 1ms@500kHz
 #define TIMER_PERIOD_BLE    2000
@@ -85,7 +85,7 @@ app_vars_t app_vars;
 
 double freqTargetList[40] = {1.252, 1.253, 1.254, 1.255, 1.256, 1.257, 1.258, 1.259, 1.260, 1.261, 1.263, 1.265, 1.266, 1.267, 1.268, 1.269, 1.270, 1.271, 1.272, 1.273, 1.274, 1.275, 1.276, 1.277, 1.278, 1.279, 1.280, 1.281, 1.282, 1.283, 1.284, 1.285, 1.286, 1.288, 1.289, 1.290, 1.291, 1.251, 1.264, 1.292};
 
-uint16_t channelHopSequence[3] = {0, 18, 36};
+uint16_t channelHopSequence[7] = {0,6,12,18,24,30,36};
 
 //=========================== prototypes ======================================
 
