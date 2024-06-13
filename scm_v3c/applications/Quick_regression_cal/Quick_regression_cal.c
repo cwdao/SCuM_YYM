@@ -26,8 +26,8 @@
 #define TIMER_PERIOD        500  // 500 = 1ms@500kHz
 #define TIMER_PERIOD_BLE    2000
 
-#define CHANNEL             0       // ble channel
-#define Freq_target         1.252 //(Target_channel/960)/2000
+// #define CHANNEL             0       // ble channel
+// #define Freq_target         1.252 //(Target_channel/960)/2000
 // #define RC_count_target     2000
 
 // only this coarse settings are swept, 
@@ -84,7 +84,7 @@ app_vars_t app_vars;
 
 double freqTargetList[40] = {1.252, 1.253, 1.254, 1.255, 1.256, 1.257, 1.258, 1.259, 1.260, 1.261, 1.263, 1.265, 1.266, 1.267, 1.268, 1.269, 1.270, 1.271, 1.272, 1.273, 1.274, 1.275, 1.276, 1.277, 1.278, 1.279, 1.280, 1.281, 1.282, 1.283, 1.284, 1.285, 1.286, 1.288, 1.289, 1.290, 1.291, 1.251, 1.264, 1.292};
 
-uint16_t channelHopSequence[1] = {0};
+uint16_t channelHopSequence[1] = {36};
 
 //=========================== prototypes ======================================
 
@@ -101,6 +101,8 @@ void        Solve_Equation(double para_matrix[][1], double Inv_equ_c, double x_m
 void        __TransmitPacket (uint16_t channelTarget);
 void        __PresiseEstimate(uint16_t channelTarget);
 uint16_t    __ChannelHop(void);
+uint8_t     __PrepareSwitchSettingPDU(void);
+void        __SwitchSettingTransmit(void);
 
 //=========================== main ============================================
 
@@ -147,10 +149,8 @@ int main(void) {
 
     // Turn on LO, DIV, PA, and IF
     ANALOG_CFG_REG__10 = 0x78;
-
     // Turn off polyphase and disable mixer
     ANALOG_CFG_REG__16 = 0x6;
-
 
     optical_enable();
 
@@ -328,7 +328,7 @@ void course_estimate(uint16_t channelTarget){
     app_vars.freq_setFinish_flag = 0;
     while(app_vars.freq_setFinish_flag == 0);
     p1R_count = app_vars.avg_sample;
-    printf("p1R_count=%d\r\n",p1R_count);
+    // printf("p1R_count=%d\r\n",p1R_count);
     
     LC_FREQCHANGE(15,31,31);
     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
@@ -757,9 +757,9 @@ uint8_t prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine) {
     app_vars.pdu[i++] = flipChar(0x42);
     app_vars.pdu[i++] = flipChar(0x09);
 	
-		app_vars.pdu[i++] = flipChar(0xCC);
-		app_vars.pdu[i++] = flipChar(0xBB);
-		app_vars.pdu[i++] = flipChar(0xAA);
+    app_vars.pdu[i++] = flipChar(0xCC);
+    app_vars.pdu[i++] = flipChar(0xBB);
+    app_vars.pdu[i++] = flipChar(0xAA);
 //		app_vars.pdu[i++] = 0x20;
 //    app_vars.pdu[i++] = 0x03;
 	
@@ -775,6 +775,32 @@ uint8_t prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine) {
     return field_len;
 }
 
+uint8_t __PrepareSwitchSettingPDU(void) {
+    
+    uint8_t i;
+    
+    uint8_t field_len;
+    
+    memset(app_vars.pdu, 0, sizeof(app_vars.pdu));
+    
+    // adv head (to be explained)
+    i = 0;
+    field_len = 0;
+    
+    app_vars.pdu[i++] = flipChar(0x42);
+    app_vars.pdu[i++] = flipChar(0x09);
+	
+    app_vars.pdu[i++] = flipChar(0xAB);
+    app_vars.pdu[i++] = flipChar(0xAB);
+    app_vars.pdu[i++] = flipChar(0xAB);
+//		app_vars.pdu[i++] = 0x20;
+//    app_vars.pdu[i++] = 0x03;
+
+    field_len += 5;
+    
+    return field_len;
+}
+
 //==== transmit process
 /**************************/
 //Function: transmit pdu packet on selected channel
@@ -784,7 +810,7 @@ uint8_t prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine) {
 //Date: 31.May.2024
 /*************************/
 void __TransmitPacket (uint16_t channelTarget){
-    int i;
+    int i,j;
     int offset;
     uint8_t cfg_course;
     uint8_t cfg_mid;
@@ -819,7 +845,7 @@ void __TransmitPacket (uint16_t channelTarget){
             cfg_mid += 1;
         }   
         printf(
-            "coarse=%d, middle=%d, fine=%d\r\n", 
+            "%d.%d.%d\r\n", 
             cfg_course,cfg_mid,cfg_fine
         );
         
@@ -848,6 +874,8 @@ void __TransmitPacket (uint16_t channelTarget){
             app_vars.sendDone = false;
             while (app_vars.sendDone==false);
         }
+        // __SwitchSettingTransmit();
+        // __SwitchSettingTransmit();
         
     }
     //p2
@@ -863,7 +891,7 @@ void __TransmitPacket (uint16_t channelTarget){
             cfg_mid += 1;
         }   
         printf(
-            "coarse=%d, middle=%d, fine=%d\r\n", 
+            "%d.%d.%d\r\n", 
             cfg_course,cfg_mid,cfg_fine
         );
         
@@ -892,8 +920,12 @@ void __TransmitPacket (uint16_t channelTarget){
             app_vars.sendDone = false;
             while (app_vars.sendDone==false);
         }
+        // __SwitchSettingTransmit();
+        // __SwitchSettingTransmit();
         
     }
+    // printf("round:%d",j);
+
     //when finsih 1 time precise estimate and finished the transmit process, set the channelHopFlag to 1
     app_vars.channelHopFlag = 1;
     //if channelHopRequest is 1, means need to do the channel hopping, the StatusFlag need back to 0
@@ -922,4 +954,16 @@ uint16_t __ChannelHop(void){
         app_vars.channelHopRequest = 0;
     }
     return  channelTarget;
+}
+
+void   __SwitchSettingTransmit(void){
+    app_vars.pdu_len = __PrepareSwitchSettingPDU();
+    ble_prepare_packt(&app_vars.pdu[0], app_vars.pdu_len);
+    ble_load_tx_arb_fifo();
+    radio_txEnable();
+    delay_tx();
+    ble_txNow_tx_arb_fifo();
+    rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+    app_vars.sendDone = false;
+    while (app_vars.sendDone==false);
 }
