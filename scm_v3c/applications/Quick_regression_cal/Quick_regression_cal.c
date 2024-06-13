@@ -70,7 +70,6 @@ typedef struct {
                     bool                    roughEstimateRequireFlag;
 
                     int 				    RC_count;                    //count the number of 2M
-                    double                  Comp_coff;
                     int                     freq_abs;
                     //to decrease the time, save the rough estimate parameter
                     double                  para_matrix[2][1];
@@ -85,7 +84,7 @@ app_vars_t app_vars;
 
 double freqTargetList[40] = {1.252, 1.253, 1.254, 1.255, 1.256, 1.257, 1.258, 1.259, 1.260, 1.261, 1.263, 1.265, 1.266, 1.267, 1.268, 1.269, 1.270, 1.271, 1.272, 1.273, 1.274, 1.275, 1.276, 1.277, 1.278, 1.279, 1.280, 1.281, 1.282, 1.283, 1.284, 1.285, 1.286, 1.288, 1.289, 1.290, 1.291, 1.251, 1.264, 1.292};
 
-uint16_t channelHopSequence[7] = {0,6,12,18,24,30,36};
+uint16_t channelHopSequence[1] = {0};
 
 //=========================== prototypes ======================================
 
@@ -301,6 +300,11 @@ void course_estimate(uint16_t channelTarget){
     double x_matrix_inverse[2][2];
     double para_matrix[2][1];
     double Inv_equ_c;
+
+    if(app_vars.roughEstimateRequireFlag == 1){
+        p1x, p1y, p2x, p2y, p3x, p3y = 0;
+        Inv_equ_c = 0;
+    }
     // double test1, test2, test3;
     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
     while (app_vars.RC_count_flag==0);
@@ -309,7 +313,7 @@ void course_estimate(uint16_t channelTarget){
     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
     while(app_vars.freq_setFinish_flag == 0);
     p1L_count = app_vars.avg_sample;
-    while (p1L_count <=1000)       
+    while (p1L_count <= 1000 || p1L_count >= 3000)       
     {
         rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
         while(app_vars.freq_setFinish_flag == 0);
@@ -317,14 +321,14 @@ void course_estimate(uint16_t channelTarget){
         p1L_count = app_vars.avg_sample;
     }
     
-    // printf("p1L_count=%d\r\n",p1L_count);
+    printf("p1L_count=%d\r\n",p1L_count);
 
     LC_FREQCHANGE(2,0,0);
     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
     app_vars.freq_setFinish_flag = 0;
     while(app_vars.freq_setFinish_flag == 0);
     p1R_count = app_vars.avg_sample;
-    // printf("p1R_count=%d\r\n",p1R_count);
+    printf("p1R_count=%d\r\n",p1R_count);
     
     LC_FREQCHANGE(15,31,31);
     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
@@ -355,11 +359,6 @@ void course_estimate(uint16_t channelTarget){
     // printf("RC_count=%d\r\n",p3R_count);
     // Inv_equ_c = (double)app_vars.RC_count;
     // // printf("ah=%f",Inv_equ_c);
-    // Comp_coff = Inv_equ_c/ 2000;
-
-    //这一步为什么算不出来 直接赋值就可以算出来？
-    // app_vars.Comp_coff = freqTargetList[channelTarget];
-    // printf("coff=%f\r\n",app_vars.Comp_coff);
     printf("RC=%d\r\n",app_vars.RC_count);
 
     p1y = (p1L_count + p1R_count)/2;
@@ -400,6 +399,8 @@ void course_estimate(uint16_t channelTarget){
     app_vars.Inv_equ_c = Inv_equ_c;
     app_vars.para_matrix[0][0] = para_matrix[0][0];
     app_vars.para_matrix[1][0] = para_matrix[1][0];
+    y_matrix[0][0] = 0;
+    y_matrix[1][0] = 0;
 }
 
 void __PresiseEstimate(uint16_t channelTarget){
@@ -477,9 +478,78 @@ void __PresiseEstimate(uint16_t channelTarget){
     }
     //存在隐藏问题，如果比两个都小，待修正
     //可以优化，如果比其中一个大，顺延到下一个course的下区
-    while ((app_vars.freq_abs > p1y && app_vars.freq_abs > p2y)||(app_vars.freq_abs < p1x && app_vars.freq_abs < p2x))
+    while ((app_vars.freq_abs > p1y && app_vars.freq_abs > p2y))
     {
         x_matrix_inverse[1][0] = x_matrix_inverse[1][0] + 1;
+        if ((int)x_matrix_inverse[0][0]%10 <=5)
+        {
+            p1R_count = (int)x_matrix_inverse[1][0];
+            printf("p1r=%d\r\n",p1R_count);
+            p1L_count = p1R_count - 1;
+            LC_FREQCHANGE(p1L_count,16,0);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p1x = app_vars.avg_sample;
+
+            LC_FREQCHANGE(p1L_count,31,31);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p1y = app_vars.avg_sample;
+
+            LC_FREQCHANGE(p1R_count,0,0);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p2x = app_vars.avg_sample;
+
+            LC_FREQCHANGE(p1R_count,15,31);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p2y = app_vars.avg_sample;
+            app_vars.tx_coarse_p1 = p1L_count;
+            app_vars.tx_coarse_p2 = p1R_count;
+        }
+        else if ((int)x_matrix_inverse[0][0]%10 >5)
+        {
+            p1L_count = (int)x_matrix_inverse[1][0];
+            printf("p1r=%d\r\n",p1R_count);
+            p1R_count = p1L_count + 1;
+            LC_FREQCHANGE(p1L_count,16,0);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p1x = app_vars.avg_sample;
+
+            LC_FREQCHANGE(p1L_count,31,31);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p1y = app_vars.avg_sample;
+
+            LC_FREQCHANGE(p1R_count,0,0);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p2x = app_vars.avg_sample;
+
+            LC_FREQCHANGE(p1R_count,15,31);
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.freq_setFinish_flag = 0;
+            while(app_vars.freq_setFinish_flag == 0);
+            p2y = app_vars.avg_sample;
+
+            app_vars.tx_coarse_p1 = p1L_count;
+            app_vars.tx_coarse_p2 = p1R_count;
+        }
+        printf("p1x=%d, p1y=%d, p2x=%d, p2y=%d\r\n",p1x, p1y, p2x, p2y);
+    }
+    //如果比任意一个小
+    while ((app_vars.freq_abs < p1x && app_vars.freq_abs < p2x))
+    {
+        x_matrix_inverse[1][0] = x_matrix_inverse[1][0] - 1;
         if ((int)x_matrix_inverse[0][0]%10 <=5)
         {
             p1R_count = (int)x_matrix_inverse[1][0];
@@ -668,7 +738,7 @@ void Solve_Equation(double para_matrix[][1], double Inv_equ_c, double x_matrix_i
     //只需要x大于0的根
     //在此处直接乘10，看除10的余数大于5还是小于5
     x_matrix_inverse[0][0] = x_matrix_inverse[1][0] * 10;
-    printf("solve = %f\r\n", x_matrix_inverse[1][0]);
+    // printf("solve = %f\r\n", x_matrix_inverse[1][0]);
 }
 
 //==== pdu related
@@ -725,6 +795,10 @@ void __TransmitPacket (uint16_t channelTarget){
     app_vars.channelHopFlag = 0;
 
     if(app_vars.roughEstimateRequireFlag == 1){
+        app_vars.Inv_equ_c = 0;
+        app_vars.para_matrix[0][0] = 0;
+        app_vars.para_matrix[0][1] = 0;
+        app_vars.avg_sample = 0;
         course_estimate(channelTarget);
     }
     
@@ -840,10 +914,10 @@ void __TransmitPacket (uint16_t channelTarget){
 uint16_t __ChannelHop(void){
     uint16_t channelTarget;
 
-    app_vars.roughEstimateRequireFlag = 0;
+    app_vars.roughEstimateRequireFlag = 1;
     if (app_vars.channelHopFlag && app_vars.channelHopRequest == 1)
     {
-        app_vars.channelHopIndex += 1;
+        // app_vars.channelHopIndex += 1;
         channelTarget = channelHopSequence[app_vars.channelHopIndex];    
         app_vars.channelHopRequest = 0;
     }
