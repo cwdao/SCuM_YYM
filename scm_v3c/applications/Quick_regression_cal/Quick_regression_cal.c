@@ -36,6 +36,8 @@
 #define NUM_SAMPLES         10
 #define RANGE               8
 
+#define LENGTH_RXPKT        20 + LENGTH_CRC
+
 
 //=========================== variables =======================================
 
@@ -78,19 +80,32 @@ typedef struct {
                     bool                    channelHopFlag;             //flag of enable channel hopping
                     bool                    channelHopRequest;          //flag of request channel hopping
                     uint8_t                 channelHopIndex;            //index of channel hopping sequence
+
+                    ///for rx
+                    uint8_t                 packet[LENGTH_RXPKT];
+                    uint8_t                 packet_len;
+                    int8_t                  rxpk_rssi;
+                    uint8_t                 rxpk_lqi;
+                    // a flag to avoid change configure during receiving frame
+                    volatile bool           rxFrameStarted;
+
 } app_vars_t;
 
 app_vars_t app_vars;
 
-double freqTargetList[40] = {1.252, 1.253, 1.254, 1.255, 1.256, 1.257, 1.258, 1.259, 1.260, 1.261, 1.263, 1.265, 1.266, 1.267, 1.268, 1.269, 1.270, 1.271, 1.272, 1.273, 1.274, 1.275, 1.276, 1.277, 1.278, 1.279, 1.280, 1.281, 1.282, 1.283, 1.284, 1.285, 1.286, 1.288, 1.289, 1.290, 1.291, 1.251, 1.264, 1.292};
+double    freqTargetList[40] = {1.252, 1.253, 1.254, 1.255, 1.256, 1.257, 1.258, 1.259, 1.260, 1.261, 1.263, 1.265, 1.266, 1.267, 1.268, 1.269, 1.270, 1.271, 1.272, 1.273, 1.274, 1.275, 1.276, 1.277, 1.278, 1.279, 1.280, 1.281, 1.282, 1.283, 1.284, 1.285, 1.286, 1.288, 1.289, 1.290, 1.291, 1.251, 1.264, 1.292};
 
-uint16_t channelHopSequence[1] = {36};
+uint16_t  channelHopSequence[1] = {36};
+uint16_t  LCsweepCode = (20U << 10) | (0U << 5) | (15U); // start at coarse=20, mid=0, fine=15
+
 
 //=========================== prototypes ======================================
 
 void        cb_endFrame_tx(uint32_t timestamp);
+void        cb_startFrame_rx(uint32_t timestamp);
+void        cb_endFrame_rx(uint32_t timestamp);
 void        cb_timer(void);
-uint8_t prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine);
+uint8_t     prepare_freq_setting_pdu(uint8_t coarse, uint8_t mid, uint8_t fine);
 
 void        delay_tx(void);
 void        delay_lc_setup(void);
@@ -103,6 +118,10 @@ void        __PresiseEstimate(uint16_t channelTarget);
 uint16_t    __ChannelHop(void);
 uint8_t     __PrepareSwitchSettingPDU(void);
 void        __SwitchSettingTransmit(void);
+void        __FreqSweep(void);
+
+void        __TxRegSet(void);
+void        __RxRegSet(void);
 
 //=========================== main ============================================
 
@@ -121,6 +140,8 @@ int main(void) {
     ble_init_tx();
 
     radio_setEndFrameTxCb(cb_endFrame_tx);
+    radio_setStartFrameRxCb(cb_startFrame_rx);
+    radio_setEndFrameRxCb(cb_endFrame_rx);
     rftimer_set_callback(cb_timer);
     
     // Disable interrupts for the radio and rftimer
@@ -147,10 +168,10 @@ int main(void) {
     
     optical_enableLCCalibration();
 
+    //default as tx mode
     // Turn on LO, DIV, PA, and IF
     ANALOG_CFG_REG__10 = 0x78;
-    // Turn off polyphase and disable mixer
-    ANALOG_CFG_REG__16 = 0x6;
+    __TxRegSet();
 
     optical_enable();
 
@@ -172,9 +193,9 @@ int main(void) {
 
     while (1) {
         
-        __TransmitPacket(channelTarget);
-        channelTarget = __ChannelHop();
-        printf("start channel hopping, target is %d\r\n",channelTarget);
+        // __TransmitPacket(channelTarget);
+        // channelTarget = __ChannelHop();
+        // printf("start channel hopping, target is %d\r\n",channelTarget);
 
     }
 }
@@ -256,12 +277,48 @@ void cb_timer(void) {
     }
 }
 
-void    cb_endFrame_tx(uint32_t timestamp){
-    
+void    cb_endFrame_tx(uint32_t timestamp){    
     printf("this is end of tx \r\n");
-	
 }
 
+void    cb_startFrame_rx(uint32_t timestamp){
+    app_vars.rxFrameStarted = true;
+}
+
+void    cb_endFrame_rx(uint32_t timestamp){
+
+    uint8_t i;
+
+    radio_getReceivedFrame(
+        &(app_vars.packet[0]),
+        &app_vars.packet_len,
+        sizeof(app_vars.packet),
+        &app_vars.rxpk_rssi,
+        &app_vars.rxpk_lqi
+    );
+
+    radio_rfOff();
+
+    if (app_vars.packet_len == LENGTH_RXPKT && (radio_getCrcOk())) {
+
+        printf(
+            "pkt received on ch %d%d%d%d%d\r\n",
+            app_vars.packet[4],
+            app_vars.packet[0],
+            app_vars.packet[1],
+            app_vars.packet[2],
+            app_vars.packet[3]
+        );
+
+        app_vars.packet_len = 0;
+        memset(&app_vars.packet[0], 0, LENGTH_RXPKT);
+    }
+
+    // radio_rxEnable();
+    // radio_rxNow();
+
+    app_vars.rxFrameStarted = false;
+}
 
 //==== delay
 
@@ -966,4 +1023,49 @@ void   __SwitchSettingTransmit(void){
     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
     app_vars.sendDone = false;
     while (app_vars.sendDone==false);
+}
+
+void __ReceivePacket(uint16_t channelTarget){
+    
+    __RxRegSet();
+
+    // Set up the 32-bit value we are searching for
+    ANALOG_CFG_REG__1 = 0x9171;	//lsbs
+    ANALOG_CFG_REG__2 = 0x6B7D;	//msbs
+    ANALOG_CFG_REG__3 = 0x60 | (2U & 0x1F);
+
+    radio_rxEnable();
+    ble_set_channel(channelTarget);
+    ISER = 0x0100;
+
+    while (app_vars.rxFrameStarted == true);
+    radio_rfOff();
+    __FreqSweep();
+    
+    radio_rxNow();
+    rftimer_setCompareIn(rftimer_readCounter() + TIMER_PERIOD);
+}
+
+void __TxRegSet(void){
+    // Turn off polyphase and disable mixer
+    ANALOG_CFG_REG__16 = 0x6;
+}
+
+void __RxRegSet(void){
+    // Enable polyphase and mixers via memory-mapped I/O
+    ANALOG_CFG_REG__16 = 0x1;
+}
+
+void __FreqSweep(void){
+    
+    LC_FREQCHANGE((LCsweepCode >> 10) & 0x1F,
+		              (LCsweepCode >> 5) & 0x1F,
+		              LCsweepCode & 0x1F);
+    LCsweepCode += 1;
+
+    if (LCsweepCode == 0x8000)
+    {
+        printf("Round over\r\n");
+        LCsweepCode = 0U;
+    }
 }
