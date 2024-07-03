@@ -95,7 +95,7 @@ app_vars_t app_vars;
 
 double    freqTargetList[40] = {1.252, 1.253, 1.254, 1.255, 1.256, 1.257, 1.258, 1.259, 1.260, 1.261, 1.263, 1.265, 1.266, 1.267, 1.268, 1.269, 1.270, 1.271, 1.272, 1.273, 1.274, 1.275, 1.276, 1.277, 1.278, 1.279, 1.280, 1.281, 1.282, 1.283, 1.284, 1.285, 1.286, 1.288, 1.289, 1.290, 1.291, 1.251, 1.264, 1.292};
 
-uint16_t  channelHopSequence[1] = {36};
+uint16_t  channelHopSequence[1] = {0};
 uint16_t  LCsweepCode = (20U << 10) | (0U << 5) | (15U); // start at coarse=20, mid=0, fine=15
 
 
@@ -119,6 +119,8 @@ uint16_t    __ChannelHop(void);
 uint8_t     __PrepareSwitchSettingPDU(void);
 void        __SwitchSettingTransmit(void);
 void        __FreqSweep(void);
+
+void        __ReceivePacket(uint16_t channelTarget);
 
 void        __TxRegSet(void);
 void        __RxRegSet(void);
@@ -193,9 +195,11 @@ int main(void) {
 
     while (1) {
         
-        // __TransmitPacket(channelTarget);
-        // channelTarget = __ChannelHop();
-        // printf("start channel hopping, target is %d\r\n",channelTarget);
+        __TransmitPacket(channelTarget);
+        channelTarget = __ChannelHop();
+        printf("start channel hopping, target is %d\r\n",channelTarget);
+
+        // __ReceivePacket(channelTarget);
 
     }
 }
@@ -286,8 +290,6 @@ void    cb_startFrame_rx(uint32_t timestamp){
 }
 
 void    cb_endFrame_rx(uint32_t timestamp){
-
-    uint8_t i;
 
     radio_getReceivedFrame(
         &(app_vars.packet[0]),
@@ -1059,10 +1061,12 @@ void __RxRegSet(void){
 void __FreqSweep(void){
     
     LC_FREQCHANGE((LCsweepCode >> 10) & 0x1F,
-		              (LCsweepCode >> 5) & 0x1F,
-		              LCsweepCode & 0x1F);
+		            (LCsweepCode >> 5) & 0x1F,
+		            LCsweepCode & 0x1F);
+    printf("%d.%d.%d\r\n",(LCsweepCode >> 10) & 0x1F,
+		                (LCsweepCode >> 5) & 0x1F,
+		                LCsweepCode & 0x1F);
     LCsweepCode += 1;
-
     if (LCsweepCode == 0x8000)
     {
         printf("Round over\r\n");
