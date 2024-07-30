@@ -309,10 +309,10 @@ void optical_sfd_isr(){
 
         // Do correction on IF RC clock
         // Fine DAC step size is ~2800 counts
-        if(count_IF > (1600000+1400)) {
+        if(count_IF > (IF_clk_target+1400)) {
             IF_fine += 1;
         }
-        if(count_IF < (1600000-1400)) {
+        if(count_IF < (IF_clk_target-1400)) {
             IF_fine -= 1;
         }
         
