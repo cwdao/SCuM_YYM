@@ -360,7 +360,7 @@ void init_ldo_control(void){
     //set_asc_bit(916);
     
     // Initialize all radio LDOs and AUX to off
-    //ANALOG_CFG_REG__10 = 0x0000;
+    ANALOG_CFG_REG__10 = 0x0000;
 
     // Examples of controlling AUX LDO:
 
@@ -383,7 +383,7 @@ void init_ldo_control(void){
     // Some examples:
         
     // Assert all PON_XX signals for the radio via memory mapped register
-    ANALOG_CFG_REG__10 = 0x0078; 
+    // ANALOG_CFG_REG__10 = 0x0078; 
 
     // Turn off all PON_XX signals for the radio via memory mapped register
     //ANALOG_CFG_REG__10 = 0x0000; 

@@ -120,7 +120,7 @@ int main(void) {
     printf("Cal complete\r\n");
     
     // schedule the first timer
-		app_vars.cfg_coarse=19;
+    app_vars.cfg_coarse=22;
     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
 
     while(1){
@@ -152,6 +152,7 @@ void     update_configuration(void){
         if (app_vars.cfg_mid==STEPS_PER_CONFIG){
             app_vars.cfg_mid = 0;
             app_vars.cfg_coarse++;
+            // printf("C:%d\r\n",app_vars.cfg_coarse);
             if (app_vars.cfg_coarse==STEPS_PER_CONFIG){
                 app_vars.cfg_coarse = 0;
             }
@@ -178,11 +179,12 @@ void    cb_timer(void) {
         avg_sample = average_sample();
         
         printf(
-            "%d.%d.%d.%d\r\n",
+            "%d%d.%d.%d.%d\r\n",
+            app_vars.cfg_coarse,
             app_vars.cfg_mid,
             app_vars.cfg_fine,
             avg_sample,
-						count_2M
+            count_2M-2000
         );
         
         update_configuration();

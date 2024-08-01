@@ -232,7 +232,7 @@ int main(void) {
                     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
                     app_vars.sendDone = false;
                     while (app_vars.sendDone==false);
-										app_vars.countFlag = 0;
+                    app_vars.countFlag = 0;
        
     }
 
