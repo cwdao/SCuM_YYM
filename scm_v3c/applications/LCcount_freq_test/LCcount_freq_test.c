@@ -24,8 +24,8 @@
 
 #define NUMPKT_PER_CFG      100
 #define STEPS_PER_CONFIG    32
-#define	TIMER_PERIOD2       2000
-#define TIMER_PERIOD        2000  // 500 = 1ms@500kHz
+#define	TIMER_PERIOD2       500
+#define TIMER_PERIOD        500  // 500 = 1ms@500kHz
 #define NUM_SAMPLES					10
 
 // only this coarse settings are swept, 
@@ -197,12 +197,12 @@ int main(void) {
         // loop through all configuration
         
         // customize coarse, mid, fine values to change the sweeping range
-			cfg_course = 23;
-			cfg_mid = 23;
-			cfg_fine = 23;
+			cfg_course = 20;
+			cfg_mid = 25;
+			cfg_fine = 7;
 								
-								rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD2);
-								while(app_vars.countFlag == 0){};
+                rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD2);
+                while(app_vars.countFlag == 0){};
                 printf(
                     "coarse=%d, middle=%d, fine=%d\r\n", 
                     cfg_course,cfg_mid,cfg_fine
@@ -220,7 +220,7 @@ int main(void) {
                     delay_lc_setup();
                     
                     ble_load_tx_arb_fifo();
-                    radio_txEnable();
+                    radio_rxEnable();
                     
                     delay_tx();
                     
@@ -232,7 +232,7 @@ int main(void) {
                     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
                     app_vars.sendDone = false;
                     while (app_vars.sendDone==false);
-										app_vars.countFlag = 0;
+                    app_vars.countFlag = 0;
        
     }
 
@@ -265,33 +265,33 @@ void cb_timer(void) {
     uint32_t count_adc;
     gpio_4_toggle();
 	
-		if(app_vars.countFlag == 0){
-			
-			if(app_vars.sample_index!=NUM_SAMPLES){
-				rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-			}
-			
-			read_counters_3B(&count_2M,&count_LC,&count_adc);
-			app_vars.samples[app_vars.sample_index] = count_LC;
-			app_vars.sample_index++;
-			if (app_vars.sample_index==NUM_SAMPLES) {
-					app_vars.countFlag = 1;
-					app_vars.sample_index = 0;
-					avg_sample = average_sample();
-					
-					printf(
-							"%d.%d\r\n",
-							count_LC,
-							count_2M
-					);
-			}
-		}
+    if(app_vars.countFlag == 0){
+        
+        if(app_vars.sample_index!=NUM_SAMPLES){
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+        }
+        
+        read_counters_3B(&count_2M,&count_LC,&count_adc);
+        app_vars.samples[app_vars.sample_index] = count_LC;
+        app_vars.sample_index++;
+        if (app_vars.sample_index==NUM_SAMPLES) {
+                app_vars.countFlag = 1;
+                app_vars.sample_index = 0;
+                avg_sample = average_sample();
+                
+                printf(
+                        "%d.%d\r\n",
+                        count_LC,
+                        count_2M
+                );
+        }
+    }
+    
+    if(app_vars.countFlag == 1){
+        app_vars.sendDone = true;
+    }
 		
-		if(app_vars.countFlag == 1){
-			app_vars.sendDone = true;
-		}
-		
-	}
+}
 
 void    cb_endFrame_tx(uint32_t timestamp){
     
