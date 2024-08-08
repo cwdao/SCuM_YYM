@@ -25,6 +25,18 @@
 #define STEPS_PER_CONFIG    32
 #define TIMER_PERIOD        500  // 500 = 1ms@500kHz
 #define TIMER_PERIOD_BLE    2000
+#define TIMER_PERIOD_RX     15000
+#define NUMPKT_PER_CFG_RX   5
+
+//define the point value to help calculate
+#define P1X                 3
+#define P2X                 16
+#define P3X                 31
+#define P1X2                (P1X*P1X)
+#define P2X2                (P2X*P2X)  
+#define P3X2                (P3X*P3X)
+
+#define SCALEFACTOR         72
 
 // #define CHANNEL             0       // ble channel
 // #define Freq_target         1.252 //(Target_channel/960)/2000
@@ -48,6 +60,13 @@ typedef struct {
                     uint8_t                 tx_coarse_p2;
                     uint8_t                 tx_mid_p2;
                     uint8_t                 tx_fine_p2;
+                    //=================================================================
+                    uint8_t                 rx_coarse_p1;
+                    uint8_t                 rx_mid_p1;
+                    uint8_t                 rx_fine_p1;
+                    uint8_t                 rx_coarse_p2;
+                    uint8_t                 rx_mid_p2;
+                    uint8_t                 rx_fine_p2;
                     //record the cb_timer num to compensite 4ms for ble transmitte
                     uint8_t			        cb_timer_num;
         volatile    uint8_t                 sample_index;
@@ -75,7 +94,7 @@ typedef struct {
                     int                     freq_abs;
                     //to decrease the time, save the rough estimate parameter
                     double                  para_matrix[2][1];
-                    double                  Inv_equ_c;  
+                    int                     Inv_equ_c;  
                     //for channel hopping
                     bool                    channelHopFlag;             //flag of enable channel hopping
                     bool                    channelHopRequest;          //flag of request channel hopping
@@ -89,14 +108,20 @@ typedef struct {
                     // a flag to avoid change configure during receiving frame
                     volatile bool           rxFrameStarted;
 
+                    //RX mode==================================================================
+                    bool                    radioModeFlag;              //flag of radio mode, 1 is tx and 0 is rx
+                    bool                    changeConfigFlag;           //flag of change rx setting
+
 } app_vars_t;
 
 app_vars_t app_vars;
 
 double    freqTargetList[40] = {1.252, 1.253, 1.254, 1.255, 1.256, 1.257, 1.258, 1.259, 1.260, 1.261, 1.263, 1.265, 1.266, 1.267, 1.268, 1.269, 1.270, 1.271, 1.272, 1.273, 1.274, 1.275, 1.276, 1.277, 1.278, 1.279, 1.280, 1.281, 1.282, 1.283, 1.284, 1.285, 1.286, 1.288, 1.289, 1.290, 1.291, 1.251, 1.264, 1.292};
 
+double    freqRXTargetList[16] = {1.251 ,1.254 ,1.256 ,1.259 ,1.261 ,1.264 ,1.267 ,1.269 ,1.272 ,1.274 ,1.277 ,1.280 ,1.282 ,1.285 ,1.288 ,1.290  };
+
 uint16_t  channelHopSequence[1] = {0};
-uint16_t  LCsweepCode = (20U << 10) | (0U << 5) | (15U); // start at coarse=20, mid=0, fine=15
+uint16_t  LCsweepCode = (25U << 10) | (0U << 5) | (15U); // start at coarse=20, mid=0, fine=15
 
 
 //=========================== prototypes ======================================
@@ -120,7 +145,7 @@ uint8_t     __PrepareSwitchSettingPDU(void);
 void        __SwitchSettingTransmit(void);
 void        __FreqSweep(void);
 
-void        __ReceivePacket(uint16_t channelTarget);
+void        __ReceivePacket(uint16_t channelRXTarget);
 
 void        __TxRegSet(void);
 void        __RxRegSet(void);
@@ -131,6 +156,7 @@ int main(void) {
 
     uint32_t calc_crc;
     uint16_t channelTarget;
+    uint16_t channelRXTarget;
 
     memset(&app_vars, 0, sizeof(app_vars_t));
 
@@ -189,17 +215,19 @@ int main(void) {
 	radio_txEnable();
     
     //set a initial channel
+    //Target as a frequency index in the list
     channelTarget = channelHopSequence[app_vars.channelHopIndex];
+    channelRXTarget = 16-11;
     //open issue================================================
     app_vars.roughEstimateRequireFlag = 1;
 
     while (1) {
         
-        __TransmitPacket(channelTarget);
-        channelTarget = __ChannelHop();
-        printf("start channel hopping, target is %d\r\n",channelTarget);
+        // __TransmitPacket(channelTarget);
+        // channelTarget = __ChannelHop();
+        // printf("start channel hopping, target is %d\r\n",channelTarget);
 
-        // __ReceivePacket(channelTarget);
+        __ReceivePacket(channelRXTarget);
 
     }
 }
@@ -230,54 +258,110 @@ uint32_t     average_sample(void){
 //Date: 31.May.2024
 /*************************/
 void cb_timer(void) {
-    if(app_vars.statusFlag == 0){
-        rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-        read_counters_3B(&app_vars.count_2M,&app_vars.count_LC,&app_vars.count_adc);
-        if (app_vars.RC_count_flag==0)
-        {
-            app_vars.samples[app_vars.sample_index] = app_vars.count_2M;
-            app_vars.sample_index++;
-            if (app_vars.sample_index==NUM_SAMPLES) {
-                app_vars.sample_index = 0;
-                app_vars.RC_count = average_sample();
-                app_vars.cb_timer_num++;
-            }
-            if (app_vars.cb_timer_num==4)
+    if(app_vars.radioModeFlag==1){
+        //tx Mode
+        if(app_vars.statusFlag == 0){
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            read_counters_3B(&app_vars.count_2M,&app_vars.count_LC,&app_vars.count_adc);
+            if (app_vars.RC_count_flag==0)
             {
-                app_vars.RC_count_flag = 1;
-            }
-            
-            // printf("here");
-        }
-        if (app_vars.RC_count_flag==1){
-            app_vars.samples[app_vars.sample_index] = app_vars.count_LC;
-            app_vars.sample_index++;
-            if (app_vars.sample_index==NUM_SAMPLES) {
-                app_vars.sample_index = 0;
-                app_vars.avg_sample = average_sample();
-        //			printf("%d \r\n",app_vars.avg_sample);
-                    
-                if(app_vars.freq_setFinish_flag == 0 && app_vars.freq_setTimes_flag == 5){
-                    app_vars.freq_setFinish_flag = 1;
-                    app_vars.freq_setTimes_flag = 0;
+                app_vars.samples[app_vars.sample_index] = app_vars.count_2M;
+                app_vars.sample_index++;
+                if (app_vars.sample_index==NUM_SAMPLES) {
+                    app_vars.sample_index = 0;
+                    app_vars.RC_count = average_sample();
+                    app_vars.cb_timer_num++;
                 }
-                app_vars.freq_setTimes_flag++;
-            }
-            if (app_vars.calculate_flag == 1)
-            {
-                app_vars.calculate_times_flag++;
-                if (app_vars.calculate_times_flag==30)
+                if (app_vars.cb_timer_num==4)
                 {
-                    app_vars.calculate_times_flag=0;
-                    app_vars.calculate_flag = 0;
+                    app_vars.RC_count_flag = 1;
                 }
                 
+                // printf("here");
+            }
+            if (app_vars.RC_count_flag==1){
+                app_vars.samples[app_vars.sample_index] = app_vars.count_LC;
+                app_vars.sample_index++;
+                if (app_vars.sample_index==NUM_SAMPLES) {
+                    app_vars.sample_index = 0;
+                    app_vars.avg_sample = average_sample();
+            //			printf("%d \r\n",app_vars.avg_sample);
+                        
+                    if(app_vars.freq_setFinish_flag == 0 && app_vars.freq_setTimes_flag == 5){
+                        app_vars.freq_setFinish_flag = 1;
+                        app_vars.freq_setTimes_flag = 0;
+                    }
+                    app_vars.freq_setTimes_flag++;
+                }
+                if (app_vars.calculate_flag == 1)
+                {
+                    app_vars.calculate_times_flag++;
+                    if (app_vars.calculate_times_flag==30)
+                    {
+                        app_vars.calculate_times_flag=0;
+                        app_vars.calculate_flag = 0;
+                    }
+                    
+                }
             }
         }
+        else if (app_vars.statusFlag == 1)
+        {
+            app_vars.sendDone = true;
+        }
     }
-    else if (app_vars.statusFlag == 1)
-    {
-        app_vars.sendDone = true;
+    else if(app_vars.radioModeFlag==0){
+        //rx Mode
+        // app_vars.changeConfigFlag = true; //sweep mode to use this
+        if(app_vars.statusFlag == 0){
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            read_counters_3B(&app_vars.count_2M,&app_vars.count_LC,&app_vars.count_adc);
+            if (app_vars.RC_count_flag==0)
+            {
+                app_vars.samples[app_vars.sample_index] = app_vars.count_2M;
+                app_vars.sample_index++;
+                if (app_vars.sample_index==NUM_SAMPLES) {
+                    app_vars.sample_index = 0;
+                    app_vars.RC_count = average_sample();
+                    app_vars.cb_timer_num++;
+                }
+                if (app_vars.cb_timer_num==4)
+                {
+                    app_vars.RC_count_flag = 1;
+                }
+                
+                // printf("here");
+            }
+            if (app_vars.RC_count_flag==1){
+                app_vars.samples[app_vars.sample_index] = app_vars.count_LC;
+                app_vars.sample_index++;
+                if (app_vars.sample_index==NUM_SAMPLES) {
+                    app_vars.sample_index = 0;
+                    app_vars.avg_sample = average_sample();
+            //			printf("%d \r\n",app_vars.avg_sample);
+                        
+                    if(app_vars.freq_setFinish_flag == 0 && app_vars.freq_setTimes_flag == 5){
+                        app_vars.freq_setFinish_flag = 1;
+                        app_vars.freq_setTimes_flag = 0;
+                    }
+                    app_vars.freq_setTimes_flag++;
+                }
+                if (app_vars.calculate_flag == 1)
+                {
+                    app_vars.calculate_times_flag++;
+                    if (app_vars.calculate_times_flag==30)
+                    {
+                        app_vars.calculate_times_flag=0;
+                        app_vars.calculate_flag = 0;
+                    }
+                    
+                }
+            }
+        }
+        else if (app_vars.statusFlag == 1)
+        {
+            app_vars.sendDone = true;
+        }
     }
 }
 
@@ -304,12 +388,12 @@ void    cb_endFrame_rx(uint32_t timestamp){
     if (app_vars.packet_len == LENGTH_RXPKT && (radio_getCrcOk())) {
 
         printf(
-            "pkt received on ch %d%d%d%d%d\r\n",
+            "ch%d RSSI%d.%d.%d.%d\r\n",
             app_vars.packet[4],
-            app_vars.packet[0],
-            app_vars.packet[1],
-            app_vars.packet[2],
-            app_vars.packet[3]
+            app_vars.rxpk_rssi,
+            (LCsweepCode >> 10) & 0x1F,
+            (LCsweepCode >> 5) & 0x1F,
+            LCsweepCode & 0x1F
         );
 
         app_vars.packet_len = 0;
@@ -358,7 +442,7 @@ void course_estimate(uint16_t channelTarget){
     int y_matrix[2][1];
     double x_matrix_inverse[2][2];
     double para_matrix[2][1];
-    double Inv_equ_c;
+    int Inv_equ_c;
 
     if(app_vars.roughEstimateRequireFlag == 1){
         p1x, p1y, p2x, p2y, p3x, p3y = 0;
@@ -368,7 +452,13 @@ void course_estimate(uint16_t channelTarget){
     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
     while (app_vars.RC_count_flag==0);
     
-    LC_FREQCHANGE(1,31,31);
+    LC_FREQCHANGE(2,31,31);
+    rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+    while(app_vars.freq_setFinish_flag == 0);
+    p1L_count = app_vars.avg_sample;
+
+    //one time sometime get an error count
+    LC_FREQCHANGE(2,31,31);
     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
     while(app_vars.freq_setFinish_flag == 0);
     p1L_count = app_vars.avg_sample;
@@ -380,9 +470,9 @@ void course_estimate(uint16_t channelTarget){
         p1L_count = app_vars.avg_sample;
     }
     
-    printf("p1L_count=%d\r\n",p1L_count);
+    // printf("p1L_count=%d\r\n",p1L_count);
 
-    LC_FREQCHANGE(2,0,0);
+    LC_FREQCHANGE(3,0,0);
     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
     app_vars.freq_setFinish_flag = 0;
     while(app_vars.freq_setFinish_flag == 0);
@@ -415,7 +505,7 @@ void course_estimate(uint16_t channelTarget){
     app_vars.freq_setFinish_flag = 0;
     while(app_vars.freq_setFinish_flag == 0);
     p3R_count = app_vars.avg_sample;
-    // printf("RC_count=%d\r\n",p3R_count);
+    // printf("p3R_count=%d\r\n",p3R_count);
     // Inv_equ_c = (double)app_vars.RC_count;
     // // printf("ah=%f",Inv_equ_c);
     printf("RC=%d\r\n",app_vars.RC_count);
@@ -423,15 +513,13 @@ void course_estimate(uint16_t channelTarget){
     p1y = (p1L_count + p1R_count)/2;
     p2y = (p2L_count + p2R_count)/2;
     p3y = (p3L_count + p3R_count)/2;
-    p1x = 2;
-    p2x = 16;
-    p3x = 31;
 
     // 修改 x_matrix
-    x_matrix[0][0] = ((p2x * p2x) - (p1x * p1x));
-    x_matrix[0][1] = (p2x - p1x);
-    x_matrix[1][0] = ((p3x * p3x) - (p1x * p1x));
-    x_matrix[1][1] = (p3x - p1x);
+    // open issue: 这个矩阵实际是一个定值矩阵，x是不变的
+    x_matrix[0][0] = (P2X2 - P1X2);
+    x_matrix[0][1] = (P2X-P1X);
+    x_matrix[1][0] = (P3X2 - P1X2);
+    x_matrix[1][1] = (P3X - P1X);
     // printf("xmatrix = %d,%d,%d,%d\r\n", x_matrix[0][0], x_matrix[0][1], x_matrix[1][0], x_matrix[1][1]);
     //0427 浮点运算算力太差，且使用标号为x会导致结果太大
     //能用整数尽可能用整数
@@ -444,17 +532,25 @@ void course_estimate(uint16_t channelTarget){
     // 修改 y_matrix
     y_matrix[0][0] = p2y - p1y;
     y_matrix[1][0] = p3y - p1y;
-    // printf("y_matrix = %d,%d\r\n", y_matrix[0][0], y_matrix[1][0]);
+    printf("y_matrix = %d,%d\r\n", y_matrix[0][0], y_matrix[1][0]);
     // printf("xmatrix = %d,%d,%d,%d\r\n", x_matrix[0][0], x_matrix[0][1], x_matrix[1][0], x_matrix[1][1]);
-    Gaussian_elimination(x_matrix, x_matrix_inverse);
+    // Gaussian_elimination(x_matrix, x_matrix_inverse);
+    //The x matrix is a fixed value, so x is not changed
+    x_matrix_inverse[0][0] = -0.005128;
+    x_matrix_inverse[0][1] = 0.002380;
+    x_matrix_inverse[1][0] = 0.174359;
+    x_matrix_inverse[1][1] = -0.045238;
+    //=========================================================================
     matrixMultiplication(x_matrix_inverse, y_matrix, para_matrix);
-    // printf("para_matrix = %f,%f\r\n", para_matrix[0][0], para_matrix[1][0]);
+    delay_tx();
+    printf("para_matrix = %f,%f\r\n", para_matrix[0][0], para_matrix[1][0]);
     //x_matrix_inverse不再使用，帮助计算存储中间值
-    x_matrix_inverse[0][0] = para_matrix[0][0] * (p2x *p2x);
-    x_matrix_inverse[0][1] = para_matrix[1][0] * p2x;
+    x_matrix_inverse[0][0] = para_matrix[0][0] * P2X2;
+    x_matrix_inverse[0][1] = para_matrix[1][0] * P2X;
     x_matrix_inverse[1][0] = x_matrix_inverse[0][0] + x_matrix_inverse[0][1];
-    Inv_equ_c = p2y - x_matrix_inverse[1][0];
-    printf("Inv_equ_c=%f\r\n",Inv_equ_c);
+    // printf("part: %f,%f,%f\r\n", x_matrix_inverse[0][0], x_matrix_inverse[0][1], x_matrix_inverse[1][0]);
+    Inv_equ_c = p2y - (int)x_matrix_inverse[1][0];
+    printf("Inv_equ_c=%d\r\n",Inv_equ_c);
     app_vars.Inv_equ_c = Inv_equ_c;
     app_vars.para_matrix[0][0] = para_matrix[0][0];
     app_vars.para_matrix[1][0] = para_matrix[1][0];
@@ -469,9 +565,11 @@ void __PresiseEstimate(uint16_t channelTarget){
     double assistMatrix[2][1];  //assist calculating, sometime directive calculating will stuck
     
     printf("begin precise stimate\r\n");
-    app_vars.freq_abs = (int)(freqTargetList[channelTarget]*app_vars.RC_count);
+    app_vars.freq_abs = (int)(freqRXTargetList[channelTarget]*app_vars.RC_count);
     printf("freq=%d\r\n",app_vars.freq_abs);
+    delay_tx();
     Solve_Equation(app_vars.para_matrix, app_vars.Inv_equ_c,x_matrix_inverse);
+    delay_tx();
     //开始分区，p1L_count, p1R_count, p2L_count, p2R_count, p3L_count, p3R_count释放，帮助计算
     if ((int)x_matrix_inverse[0][0]%10 <=5)
     {
@@ -501,8 +599,17 @@ void __PresiseEstimate(uint16_t channelTarget){
         app_vars.freq_setFinish_flag = 0;
         while(app_vars.freq_setFinish_flag == 0);
         p2y = app_vars.avg_sample;
-        app_vars.tx_coarse_p1 = p1L_count;
-        app_vars.tx_coarse_p2 = p1R_count;
+        if (app_vars.radioModeFlag == 1)
+        {
+            app_vars.tx_coarse_p1 = p1L_count;
+            app_vars.tx_coarse_p2 = p1R_count;
+        }
+        else
+        {
+            app_vars.rx_coarse_p1 = p1L_count;
+            app_vars.rx_coarse_p2 = p1R_count;
+        }
+        
     }
     else if ((int)x_matrix_inverse[0][0]%10 >5)
     {
@@ -532,8 +639,16 @@ void __PresiseEstimate(uint16_t channelTarget){
         app_vars.freq_setFinish_flag = 0;
         while(app_vars.freq_setFinish_flag == 0);
         p2y = app_vars.avg_sample;
-        app_vars.tx_coarse_p1 = p1L_count;
-        app_vars.tx_coarse_p2 = p1R_count;
+        if (app_vars.radioModeFlag == 1)
+        {
+            app_vars.tx_coarse_p1 = p1L_count;
+            app_vars.tx_coarse_p2 = p1R_count;
+        }
+        else
+        {
+            app_vars.rx_coarse_p1 = p1L_count;
+            app_vars.rx_coarse_p2 = p1R_count;
+        }
     }
     //存在隐藏问题，如果比两个都小，待修正
     //可以优化，如果比其中一个大，顺延到下一个course的下区
@@ -568,8 +683,16 @@ void __PresiseEstimate(uint16_t channelTarget){
             app_vars.freq_setFinish_flag = 0;
             while(app_vars.freq_setFinish_flag == 0);
             p2y = app_vars.avg_sample;
-            app_vars.tx_coarse_p1 = p1L_count;
-            app_vars.tx_coarse_p2 = p1R_count;
+            if (app_vars.radioModeFlag == 1)
+            {
+                app_vars.tx_coarse_p1 = p1L_count;
+                app_vars.tx_coarse_p2 = p1R_count;
+            }
+            else
+            {
+                app_vars.rx_coarse_p1 = p1L_count;
+                app_vars.rx_coarse_p2 = p1R_count;
+            }
         }
         else if ((int)x_matrix_inverse[0][0]%10 >5)
         {
@@ -600,8 +723,16 @@ void __PresiseEstimate(uint16_t channelTarget){
             while(app_vars.freq_setFinish_flag == 0);
             p2y = app_vars.avg_sample;
 
-            app_vars.tx_coarse_p1 = p1L_count;
-            app_vars.tx_coarse_p2 = p1R_count;
+            if (app_vars.radioModeFlag == 1)
+            {
+                app_vars.tx_coarse_p1 = p1L_count;
+                app_vars.tx_coarse_p2 = p1R_count;
+            }
+            else
+            {
+                app_vars.rx_coarse_p1 = p1L_count;
+                app_vars.rx_coarse_p2 = p1R_count;
+            }
         }
         printf("p1x=%d, p1y=%d, p2x=%d, p2y=%d\r\n",p1x, p1y, p2x, p2y);
     }
@@ -637,8 +768,16 @@ void __PresiseEstimate(uint16_t channelTarget){
             app_vars.freq_setFinish_flag = 0;
             while(app_vars.freq_setFinish_flag == 0);
             p2y = app_vars.avg_sample;
-            app_vars.tx_coarse_p1 = p1L_count;
-            app_vars.tx_coarse_p2 = p1R_count;
+            if (app_vars.radioModeFlag == 1)
+            {
+                app_vars.tx_coarse_p1 = p1L_count;
+                app_vars.tx_coarse_p2 = p1R_count;
+            }
+            else
+            {
+                app_vars.rx_coarse_p1 = p1L_count;
+                app_vars.rx_coarse_p2 = p1R_count;
+            }
         }
         else if ((int)x_matrix_inverse[0][0]%10 >5)
         {
@@ -669,8 +808,16 @@ void __PresiseEstimate(uint16_t channelTarget){
             while(app_vars.freq_setFinish_flag == 0);
             p2y = app_vars.avg_sample;
 
-            app_vars.tx_coarse_p1 = p1L_count;
-            app_vars.tx_coarse_p2 = p1R_count;
+            if (app_vars.radioModeFlag == 1)
+            {
+                app_vars.tx_coarse_p1 = p1L_count;
+                app_vars.tx_coarse_p2 = p1R_count;
+            }
+            else
+            {
+                app_vars.rx_coarse_p1 = p1L_count;
+                app_vars.rx_coarse_p2 = p1R_count;
+            }
         }
         printf("p1x=%d, p1y=%d, p2x=%d, p2y=%d\r\n",p1x, p1y, p2x, p2y);
     }
@@ -722,13 +869,27 @@ void __PresiseEstimate(uint16_t channelTarget){
         p2x = 0;
         p2y = 0;
     }
-    printf("set1=%d,%d\r\n",p1x,p1y);
-    printf("set2=%d.%d\r\n",p2x,p2y); 
-    app_vars.tx_mid_p1 = p1x;
-    app_vars.tx_fine_p1 = p1y;
-    app_vars.tx_mid_p2 = p2x;
-    app_vars.tx_fine_p2 = p2y;
-    app_vars.statusFlag = 1;
+    
+    
+    if (app_vars.radioModeFlag == 1)
+    {
+        printf("set1=%d,%d,%d\r\n",app_vars.tx_coarse_p1,p1x,p1y);
+        printf("set2=%d,%d.%d\r\n",app_vars.tx_coarse_p2,p2x,p2y); 
+        app_vars.tx_mid_p1 = p1x;
+        app_vars.tx_fine_p1 = p1y;
+        app_vars.tx_mid_p2 = p2x;
+        app_vars.tx_fine_p2 = p2y;
+        app_vars.statusFlag = 1;
+    }
+    else
+    {
+        printf("set1=%d,%d,%d\r\n",app_vars.rx_coarse_p1,p1x,p1y);
+        printf("set2=%d,%d.%d\r\n",app_vars.rx_coarse_p2,p2x,p2y); 
+        app_vars.rx_mid_p1 = p1x;
+        app_vars.rx_fine_p1 = p1y;
+        app_vars.rx_mid_p2 = p2x;
+        app_vars.rx_fine_p2 = p2y;
+    }
     
 }
 
@@ -783,21 +944,33 @@ void matrixMultiplication(double x_matrix_inverse[][2], int y_matrix[][1], doubl
 }
 
 void Solve_Equation(double para_matrix[][1], double Inv_equ_c, double x_matrix_inverse[][2]) {
-    Inv_equ_c = Inv_equ_c - app_vars.freq_abs;
+    int intXMatrixInverse[2][2] = {0};
+    int intParaMatrix[2][1] = {0};
+
+    Inv_equ_c =  app_vars.freq_abs - Inv_equ_c;
+    Inv_equ_c = Inv_equ_c * SCALEFACTOR;
+    intParaMatrix[0][0] = (int)(para_matrix[0][0]*SCALEFACTOR);
+    intParaMatrix[1][0] = (int)(para_matrix[1][0]*SCALEFACTOR);
+    // printf("intParaMatrix:%d,%d\r\n",intParaMatrix[0][0],intParaMatrix[1][0]);
+    
     //同样使用x_matrix_inverse帮助计算存储中间值，以减少内存
-    x_matrix_inverse[0][0] = para_matrix[1][0]*para_matrix[1][0];
-    x_matrix_inverse[0][1] = 4 * para_matrix[0][0]*Inv_equ_c;
-    x_matrix_inverse[1][0] = x_matrix_inverse[0][0] - x_matrix_inverse[0][1];
-    x_matrix_inverse[1][1] = sqrt(x_matrix_inverse[1][0]);
+    intXMatrixInverse[0][0] = intParaMatrix[1][0]*intParaMatrix[1][0];
+    intXMatrixInverse[0][1] = 4 * intParaMatrix[0][0]*Inv_equ_c;
+    intXMatrixInverse[1][0] = intXMatrixInverse[0][0] + intXMatrixInverse[0][1];
+    intXMatrixInverse[1][1] = sqrt(intXMatrixInverse[1][0]);
+    // printf("x_matrix_inverse:%d,%d,%d,%d\r\n",intXMatrixInverse[0][0],intXMatrixInverse[0][1], intXMatrixInverse[1][0],intXMatrixInverse[1][1]);    
+    delay_tx();
+    x_matrix_inverse[1][1] = (float)intXMatrixInverse[1][1] / SCALEFACTOR;
 
     //x_matrix_inverse[0][0],[0][1],[1][0]重新释放 
     x_matrix_inverse[0][0] = 2*para_matrix[0][0];
     x_matrix_inverse[0][1] = 1/x_matrix_inverse[0][0];
     x_matrix_inverse[1][0] = x_matrix_inverse[0][1] * (-para_matrix[1][0]+x_matrix_inverse[1][1]);
+    // printf("x_matrix_inverse:%f,%f,%f,%f\r\n",x_matrix_inverse[0][0],x_matrix_inverse[0][1], x_matrix_inverse[1][0],x_matrix_inverse[1][1]);
     //只需要x大于0的根
     //在此处直接乘10，看除10的余数大于5还是小于5
-    x_matrix_inverse[0][0] = x_matrix_inverse[1][0] * 10;
-    // printf("solve = %f\r\n", x_matrix_inverse[1][0]);
+    x_matrix_inverse[0][0] = x_matrix_inverse[1][0] * 10;    
+    printf("solve = %f\r\n", x_matrix_inverse[1][0]);
 }
 
 //==== pdu related
@@ -878,6 +1051,8 @@ void __TransmitPacket (uint16_t channelTarget){
     //reseved function
     app_vars.channelHopRequest = 1;
     app_vars.channelHopFlag = 0;
+
+    app_vars.radioModeFlag = 1;
 
     if(app_vars.roughEstimateRequireFlag == 1){
         app_vars.Inv_equ_c = 0;
@@ -1027,25 +1202,90 @@ void   __SwitchSettingTransmit(void){
     while (app_vars.sendDone==false);
 }
 
-void __ReceivePacket(uint16_t channelTarget){
+void __ReceivePacket(uint16_t channelRXTarget){
+    uint8_t i;
+    int offset;
+    uint8_t cfg_course;
+    uint8_t cfg_mid;
+    int cfg_fine;
     
-    __RxRegSet();
+    app_vars.radioModeFlag = 0;
 
-    // Set up the 32-bit value we are searching for
-    ANALOG_CFG_REG__1 = 0x9171;	//lsbs
-    ANALOG_CFG_REG__2 = 0x6B7D;	//msbs
-    ANALOG_CFG_REG__3 = 0x60 | (2U & 0x1F);
+    course_estimate(channelRXTarget);
+    __PresiseEstimate(channelRXTarget);
 
-    radio_rxEnable();
-    ble_set_channel(channelTarget);
-    ISER = 0x0100;
+    // while(app_vars.rxFrameStarted == true);
+    // radio_rfOff();
+    // __FreqSweep();
+    // for (i=0;i<NUMPKT_PER_CFG;i++)
+    // {
+    //     __RxRegSet();    
+    //     radio_rxNow();
+    //     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+    //     app_vars.changeConfigFlag = false;
+    //     while (app_vars.changeConfigFlag==false);
+    // }
 
-    while (app_vars.rxFrameStarted == true);
-    radio_rfOff();
-    __FreqSweep();
+    cfg_course = app_vars.tx_coarse_p1;
+    for(offset = -RANGE; offset <= RANGE; offset++){
+        cfg_fine = app_vars.tx_fine_p1 + offset;
+        cfg_mid = app_vars.tx_mid_p1;
+        if(cfg_fine<0){
+            cfg_fine = 31+offset;
+            cfg_mid -= 1;
+        }else if(cfg_fine>32){
+            cfg_fine = offset;
+            cfg_mid += 1;
+        }   
+        printf(
+            "%d.%d.%d\r\n", 
+            cfg_course,cfg_mid,cfg_fine
+        );
+        
+        while(app_vars.rxFrameStarted == true);
+        radio_rfOff();
+        __FreqSweep();
+        for (i=0;i<NUMPKT_PER_CFG_RX;i++) {
+            __RxRegSet();    
+            radio_rxNow();
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.changeConfigFlag = false;
+            while (app_vars.changeConfigFlag==false);
+        }
+        
+        
+    }
+    //p2
+    cfg_course = app_vars.tx_coarse_p2;
+    for(offset = -RANGE; offset <= RANGE; offset++){
+        cfg_fine = app_vars.tx_fine_p2 + offset;
+        cfg_mid = app_vars.tx_mid_p2;
+        if(cfg_fine<0){
+            cfg_fine = 31+offset;
+            cfg_mid -= 1;
+        }else if(cfg_fine>32){
+            cfg_fine = offset;
+            cfg_mid += 1;
+        }   
+        printf(
+            "%d.%d.%d\r\n", 
+            cfg_course,cfg_mid,cfg_fine
+        );
+        
+        while(app_vars.rxFrameStarted == true);
+        radio_rfOff();
+        __FreqSweep();
+        
+        for (i=0;i<NUMPKT_PER_CFG;i++) {
+            __RxRegSet();    
+            radio_rxNow();
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
+            app_vars.changeConfigFlag = false;
+            while (app_vars.changeConfigFlag==false);
+        }
+    }
     
-    radio_rxNow();
-    rftimer_setCompareIn(rftimer_readCounter() + TIMER_PERIOD);
+   
 }
 
 void __TxRegSet(void){
@@ -1055,7 +1295,8 @@ void __TxRegSet(void){
 
 void __RxRegSet(void){
     // Enable polyphase and mixers via memory-mapped I/O
-    ANALOG_CFG_REG__16 = 0x1;
+    radio_rxEnable();
+    radio_rxNow();
 }
 
 void __FreqSweep(void){

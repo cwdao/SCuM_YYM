@@ -143,7 +143,7 @@ int main(void) {
     while(1){
         
         // loop through all configuration
-        for (app_vars.cfg_coarse=22;app_vars.cfg_coarse<STEPS_PER_CONFIG;app_vars.cfg_coarse++){
+        for (app_vars.cfg_coarse=24;app_vars.cfg_coarse<STEPS_PER_CONFIG;app_vars.cfg_coarse++){
             for (app_vars.cfg_mid=0;app_vars.cfg_mid<STEPS_PER_CONFIG;app_vars.cfg_mid++){
                 for (app_vars.cfg_fine=0;app_vars.cfg_fine<STEPS_PER_CONFIG;app_vars.cfg_fine++){
                    printf(
