@@ -25,8 +25,8 @@
 #define STEPS_PER_CONFIG    32
 #define TIMER_PERIOD        500  // 500 = 1ms@500kHz
 #define TIMER_PERIOD_BLE    2000
-#define TIMER_PERIOD_RX     15000
-#define NUMPKT_PER_CFG_RX   5
+#define TIMER_PERIOD_RX     7200
+#define NUMPKT_PER_CFG_RX   10
 
 //define the point value to help calculate
 #define P1X                 3
@@ -121,7 +121,7 @@ double    freqTargetList[40] = {1.252, 1.253, 1.254, 1.255, 1.256, 1.257, 1.258,
 double    freqRXTargetList[16] = {1.251 ,1.254 ,1.256 ,1.259 ,1.261 ,1.264 ,1.267 ,1.269 ,1.272 ,1.274 ,1.277 ,1.280 ,1.282 ,1.285 ,1.288 ,1.290  };
 
 uint16_t  channelHopSequence[1] = {0};
-uint16_t  LCsweepCode = (25U << 10) | (0U << 5) | (15U); // start at coarse=20, mid=0, fine=15
+uint16_t  LCsweepCode = (23U << 10) | (15U << 5) | (15U); // start at coarse=20, mid=0, fine=15
 
 
 //=========================== prototypes ======================================
@@ -137,7 +137,7 @@ void        delay_lc_setup(void);
 void        course_estimate(uint16_t channelTarget);
 void        Gaussian_elimination(int x_matrix_raw[2][2], double x_matrix_inverse[2][2]);
 void        matrixMultiplication(double x_matrix_inverse[][2], int y_matrix[][1], double para_matrix[][1]);
-void        Solve_Equation(double para_matrix[][1], double Inv_equ_c, double x_matrix_inverse[][2]);
+double      Solve_Equation(double para_matrix[][1], double Inv_equ_c);
 void        __TransmitPacket (uint16_t channelTarget);
 void        __PresiseEstimate(uint16_t channelTarget);
 uint16_t    __ChannelHop(void);
@@ -360,7 +360,7 @@ void cb_timer(void) {
         }
         else if (app_vars.statusFlag == 1)
         {
-            app_vars.sendDone = true;
+            app_vars.changeConfigFlag = true;
         }
     }
 }
@@ -400,8 +400,8 @@ void    cb_endFrame_rx(uint32_t timestamp){
         memset(&app_vars.packet[0], 0, LENGTH_RXPKT);
     }
 
-    // radio_rxEnable();
-    // radio_rxNow();
+    radio_rxEnable();
+    radio_rxNow();
 
     app_vars.rxFrameStarted = false;
 }
@@ -543,14 +543,14 @@ void course_estimate(uint16_t channelTarget){
     //=========================================================================
     matrixMultiplication(x_matrix_inverse, y_matrix, para_matrix);
     delay_tx();
-    printf("para_matrix = %f,%f\r\n", para_matrix[0][0], para_matrix[1][0]);
+    // printf("para_matrix = %f,%f\r\n", para_matrix[0][0], para_matrix[1][0]);
     //x_matrix_inverse不再使用，帮助计算存储中间值
     x_matrix_inverse[0][0] = para_matrix[0][0] * P2X2;
     x_matrix_inverse[0][1] = para_matrix[1][0] * P2X;
     x_matrix_inverse[1][0] = x_matrix_inverse[0][0] + x_matrix_inverse[0][1];
     // printf("part: %f,%f,%f\r\n", x_matrix_inverse[0][0], x_matrix_inverse[0][1], x_matrix_inverse[1][0]);
     Inv_equ_c = p2y - (int)x_matrix_inverse[1][0];
-    printf("Inv_equ_c=%d\r\n",Inv_equ_c);
+    // printf("Inv_equ_c=%d\r\n",Inv_equ_c);
     app_vars.Inv_equ_c = Inv_equ_c;
     app_vars.para_matrix[0][0] = para_matrix[0][0];
     app_vars.para_matrix[1][0] = para_matrix[1][0];
@@ -564,11 +564,11 @@ void __PresiseEstimate(uint16_t channelTarget){
     double x_matrix_inverse[2][2];
     double assistMatrix[2][1];  //assist calculating, sometime directive calculating will stuck
     
-    printf("begin precise stimate\r\n");
+    // printf("begin precise stimate\r\n");
     app_vars.freq_abs = (int)(freqRXTargetList[channelTarget]*app_vars.RC_count);
     printf("freq=%d\r\n",app_vars.freq_abs);
     delay_tx();
-    Solve_Equation(app_vars.para_matrix, app_vars.Inv_equ_c,x_matrix_inverse);
+    x_matrix_inverse[0][0], x_matrix_inverse[1][0] = Solve_Equation(app_vars.para_matrix, app_vars.Inv_equ_c);
     delay_tx();
     //开始分区，p1L_count, p1R_count, p2L_count, p2R_count, p3L_count, p3R_count释放，帮助计算
     if ((int)x_matrix_inverse[0][0]%10 <=5)
@@ -889,6 +889,7 @@ void __PresiseEstimate(uint16_t channelTarget){
         app_vars.rx_fine_p1 = p1y;
         app_vars.rx_mid_p2 = p2x;
         app_vars.rx_fine_p2 = p2y;
+        app_vars.statusFlag = 1;
     }
     
 }
@@ -943,15 +944,18 @@ void matrixMultiplication(double x_matrix_inverse[][2], int y_matrix[][1], doubl
     }
 }
 
-void Solve_Equation(double para_matrix[][1], double Inv_equ_c, double x_matrix_inverse[][2]) {
+double Solve_Equation(double para_matrix[][1], double Inv_equ_c) {
     int intXMatrixInverse[2][2] = {0};
     int intParaMatrix[2][1] = {0};
+    double x_matrix_inverse_temp[2][2] = {0};
+
 
     Inv_equ_c =  app_vars.freq_abs - Inv_equ_c;
     Inv_equ_c = Inv_equ_c * SCALEFACTOR;
     intParaMatrix[0][0] = (int)(para_matrix[0][0]*SCALEFACTOR);
     intParaMatrix[1][0] = (int)(para_matrix[1][0]*SCALEFACTOR);
     // printf("intParaMatrix:%d,%d\r\n",intParaMatrix[0][0],intParaMatrix[1][0]);
+    delay_tx();
     
     //同样使用x_matrix_inverse帮助计算存储中间值，以减少内存
     intXMatrixInverse[0][0] = intParaMatrix[1][0]*intParaMatrix[1][0];
@@ -960,17 +964,19 @@ void Solve_Equation(double para_matrix[][1], double Inv_equ_c, double x_matrix_i
     intXMatrixInverse[1][1] = sqrt(intXMatrixInverse[1][0]);
     // printf("x_matrix_inverse:%d,%d,%d,%d\r\n",intXMatrixInverse[0][0],intXMatrixInverse[0][1], intXMatrixInverse[1][0],intXMatrixInverse[1][1]);    
     delay_tx();
-    x_matrix_inverse[1][1] = (float)intXMatrixInverse[1][1] / SCALEFACTOR;
+    x_matrix_inverse_temp[1][1] = (float)intXMatrixInverse[1][1] / SCALEFACTOR;
 
     //x_matrix_inverse[0][0],[0][1],[1][0]重新释放 
-    x_matrix_inverse[0][0] = 2*para_matrix[0][0];
-    x_matrix_inverse[0][1] = 1/x_matrix_inverse[0][0];
-    x_matrix_inverse[1][0] = x_matrix_inverse[0][1] * (-para_matrix[1][0]+x_matrix_inverse[1][1]);
+    x_matrix_inverse_temp[0][0] = 2*para_matrix[0][0];
+    x_matrix_inverse_temp[0][1] = 1/x_matrix_inverse_temp[0][0];
+    x_matrix_inverse_temp[1][0] = x_matrix_inverse_temp[0][1] * (-para_matrix[1][0]+x_matrix_inverse_temp[1][1]);
     // printf("x_matrix_inverse:%f,%f,%f,%f\r\n",x_matrix_inverse[0][0],x_matrix_inverse[0][1], x_matrix_inverse[1][0],x_matrix_inverse[1][1]);
     //只需要x大于0的根
     //在此处直接乘10，看除10的余数大于5还是小于5
-    x_matrix_inverse[0][0] = x_matrix_inverse[1][0] * 10;    
-    printf("solve = %f\r\n", x_matrix_inverse[1][0]);
+    x_matrix_inverse_temp[0][0] = x_matrix_inverse_temp[1][0] * 10; 
+    delay_tx();   
+    printf("solve = %f\r\n", x_matrix_inverse_temp[1][0]);
+    return x_matrix_inverse_temp[0][0], x_matrix_inverse_temp[1][0];
 }
 
 //==== pdu related
@@ -1211,78 +1217,77 @@ void __ReceivePacket(uint16_t channelRXTarget){
     
     app_vars.radioModeFlag = 0;
 
-    course_estimate(channelRXTarget);
-    __PresiseEstimate(channelRXTarget);
+    // course_estimate(channelRXTarget);
+    // __PresiseEstimate(channelRXTarget);
 
-    // while(app_vars.rxFrameStarted == true);
-    // radio_rfOff();
-    // __FreqSweep();
-    // for (i=0;i<NUMPKT_PER_CFG;i++)
-    // {
-    //     __RxRegSet();    
-    //     radio_rxNow();
-    //     rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-    //     app_vars.changeConfigFlag = false;
-    //     while (app_vars.changeConfigFlag==false);
+    // cfg_course = app_vars.rx_coarse_p1;
+    // for(offset = -RANGE; offset <= RANGE; offset++){
+    //     cfg_fine = app_vars.rx_fine_p1 + offset;
+    //     cfg_mid = app_vars.rx_mid_p1;
+    //     if(cfg_fine<0){
+    //         cfg_fine = 31+offset;
+    //         cfg_mid -= 1;
+    //     }else if(cfg_fine>32){
+    //         cfg_fine = offset;
+    //         cfg_mid += 1;
+    //     }   
+    //     printf(
+    //         "%d.%d.%d\r\n", 
+    //         cfg_course,cfg_mid,cfg_fine
+    //     );
+        
+    //     for (i=0;i<NUMPKT_PER_CFG_RX;i++) {
+    //         while(app_vars.rxFrameStarted == true);
+    //         radio_rfOff();
+    //         // __FreqSweep();
+    //         __RxRegSet();    
+    //         rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD_RX);
+    //         app_vars.changeConfigFlag = false;
+    //         while (app_vars.changeConfigFlag==false);
+    //     }
+        
+        
+    // }
+    // //p2
+    // cfg_course = app_vars.rx_coarse_p2;
+    // for(offset = -RANGE; offset <= RANGE; offset++){
+    //     cfg_fine = app_vars.rx_fine_p2 + offset;
+    //     cfg_mid = app_vars.rx_mid_p2;
+    //     if(cfg_fine<0){
+    //         cfg_fine = 31+offset;
+    //         cfg_mid -= 1;
+    //     }else if(cfg_fine>32){
+    //         cfg_fine = offset;
+    //         cfg_mid += 1;
+    //     }   
+    //     printf(
+    //         "%d.%d.%d\r\n", 
+    //         cfg_course,cfg_mid,cfg_fine
+    //     );
+        
+    //     for (i=0;i<NUMPKT_PER_CFG_RX;i++) {
+    //         while(app_vars.rxFrameStarted == true);
+    //         radio_rfOff();
+    //         // __FreqSweep();
+    //         __RxRegSet();    
+    //         radio_rxNow();
+    //         rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD_RX);
+    //         app_vars.changeConfigFlag = false;
+    //         while (app_vars.changeConfigFlag==false);
+    //     }
     // }
 
-    cfg_course = app_vars.tx_coarse_p1;
-    for(offset = -RANGE; offset <= RANGE; offset++){
-        cfg_fine = app_vars.tx_fine_p1 + offset;
-        cfg_mid = app_vars.tx_mid_p1;
-        if(cfg_fine<0){
-            cfg_fine = 31+offset;
-            cfg_mid -= 1;
-        }else if(cfg_fine>32){
-            cfg_fine = offset;
-            cfg_mid += 1;
-        }   
-        printf(
-            "%d.%d.%d\r\n", 
-            cfg_course,cfg_mid,cfg_fine
-        );
-        
-        while(app_vars.rxFrameStarted == true);
-        radio_rfOff();
-        __FreqSweep();
-        for (i=0;i<NUMPKT_PER_CFG_RX;i++) {
-            __RxRegSet();    
-            radio_rxNow();
-            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-            app_vars.changeConfigFlag = false;
-            while (app_vars.changeConfigFlag==false);
-        }
-        
-        
-    }
-    //p2
-    cfg_course = app_vars.tx_coarse_p2;
-    for(offset = -RANGE; offset <= RANGE; offset++){
-        cfg_fine = app_vars.tx_fine_p2 + offset;
-        cfg_mid = app_vars.tx_mid_p2;
-        if(cfg_fine<0){
-            cfg_fine = 31+offset;
-            cfg_mid -= 1;
-        }else if(cfg_fine>32){
-            cfg_fine = offset;
-            cfg_mid += 1;
-        }   
-        printf(
-            "%d.%d.%d\r\n", 
-            cfg_course,cfg_mid,cfg_fine
-        );
-        
-        while(app_vars.rxFrameStarted == true);
-        radio_rfOff();
-        __FreqSweep();
-        
-        for (i=0;i<NUMPKT_PER_CFG;i++) {
-            __RxRegSet();    
-            radio_rxNow();
-            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD);
-            app_vars.changeConfigFlag = false;
-            while (app_vars.changeConfigFlag==false);
-        }
+    while(app_vars.rxFrameStarted == true);
+    radio_rfOff();
+    __FreqSweep();
+    app_vars.statusFlag = 1;
+    for (i=0;i<NUMPKT_PER_CFG_RX;i++)
+    {
+        __RxRegSet();    
+        radio_rxNow();
+        rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD_RX);
+        app_vars.changeConfigFlag = false;
+        while (app_vars.changeConfigFlag==false);
     }
     
    
