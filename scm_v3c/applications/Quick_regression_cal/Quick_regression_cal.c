@@ -47,6 +47,7 @@
 
 #define NUM_SAMPLES         10
 #define RANGE               8
+#define RANGE_RX            32
 
 #define LENGTH_RXPKT        20 + LENGTH_CRC
 
@@ -121,7 +122,7 @@ double    freqTargetList[40] = {1.252, 1.253, 1.254, 1.255, 1.256, 1.257, 1.258,
 double    freqRXTargetList[16] = {1.251 ,1.254 ,1.256 ,1.259 ,1.261 ,1.264 ,1.267 ,1.269 ,1.272 ,1.274 ,1.277 ,1.280 ,1.282 ,1.285 ,1.288 ,1.290  };
 
 uint16_t  channelHopSequence[1] = {0};
-uint16_t  LCsweepCode = (23U << 10) | (15U << 5) | (15U); // start at coarse=20, mid=0, fine=15
+uint16_t  LCsweepCode = (25U << 10) | (15U << 5) | (15U); // start at coarse=20, mid=0, fine=15
 
 
 //=========================== prototypes ======================================
@@ -1217,65 +1218,69 @@ void __ReceivePacket(uint16_t channelRXTarget){
     
     app_vars.radioModeFlag = 0;
 
-    // course_estimate(channelRXTarget);
-    // __PresiseEstimate(channelRXTarget);
+    course_estimate(channelRXTarget);
+    __PresiseEstimate(channelRXTarget);
 
-    // cfg_course = app_vars.rx_coarse_p1;
-    // for(offset = -RANGE; offset <= RANGE; offset++){
-    //     cfg_fine = app_vars.rx_fine_p1 + offset;
-    //     cfg_mid = app_vars.rx_mid_p1;
-    //     if(cfg_fine<0){
-    //         cfg_fine = 31+offset;
-    //         cfg_mid -= 1;
-    //     }else if(cfg_fine>32){
-    //         cfg_fine = offset;
-    //         cfg_mid += 1;
-    //     }   
-    //     printf(
-    //         "%d.%d.%d\r\n", 
-    //         cfg_course,cfg_mid,cfg_fine
-    //     );
+    cfg_course = app_vars.rx_coarse_p1;
+    for(offset = -RANGE_RX; offset <= RANGE_RX; offset++){
+        cfg_fine = app_vars.rx_fine_p1 + offset;
+        cfg_mid = app_vars.rx_mid_p1;
+        if(cfg_fine<0){
+            cfg_fine = 31+offset;
+            cfg_mid -= 1;
+        }else if(cfg_fine>=32){
+            cfg_fine = offset;
+            cfg_mid += 1;
+        }   
+        printf(
+            "%d.%d.%d\r\n", 
+            cfg_course,cfg_mid,cfg_fine
+        );
         
-    //     for (i=0;i<NUMPKT_PER_CFG_RX;i++) {
-    //         while(app_vars.rxFrameStarted == true);
-    //         radio_rfOff();
-    //         // __FreqSweep();
-    //         __RxRegSet();    
-    //         rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD_RX);
-    //         app_vars.changeConfigFlag = false;
-    //         while (app_vars.changeConfigFlag==false);
-    //     }
+        while(app_vars.rxFrameStarted == true);
+        radio_rfOff();
+        LC_FREQCHANGE(cfg_course, cfg_mid, cfg_fine);
+        delay_lc_setup();
+        for (i=0;i<NUMPKT_PER_CFG_RX;i++) {
+            // __FreqSweep();
+            __RxRegSet();    
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD_RX);
+            app_vars.changeConfigFlag = false;
+            while (app_vars.changeConfigFlag==false);
+        }
         
         
-    // }
-    // //p2
-    // cfg_course = app_vars.rx_coarse_p2;
-    // for(offset = -RANGE; offset <= RANGE; offset++){
-    //     cfg_fine = app_vars.rx_fine_p2 + offset;
-    //     cfg_mid = app_vars.rx_mid_p2;
-    //     if(cfg_fine<0){
-    //         cfg_fine = 31+offset;
-    //         cfg_mid -= 1;
-    //     }else if(cfg_fine>32){
-    //         cfg_fine = offset;
-    //         cfg_mid += 1;
-    //     }   
-    //     printf(
-    //         "%d.%d.%d\r\n", 
-    //         cfg_course,cfg_mid,cfg_fine
-    //     );
+    }
+    //p2
+    cfg_course = app_vars.rx_coarse_p2;
+    for(offset = -RANGE_RX; offset <= RANGE_RX; offset++){
+        cfg_fine = app_vars.rx_fine_p2 + offset;
+        cfg_mid = app_vars.rx_mid_p2;
+        if(cfg_fine<0){
+            cfg_fine = 31+offset;
+            cfg_mid -= 1;
+        }else if(cfg_fine>=32){
+            cfg_fine = offset;
+            cfg_mid += 1;
+        }   
+        printf(
+            "%d.%d.%d\r\n", 
+            cfg_course,cfg_mid,cfg_fine
+        );
         
-    //     for (i=0;i<NUMPKT_PER_CFG_RX;i++) {
-    //         while(app_vars.rxFrameStarted == true);
-    //         radio_rfOff();
-    //         // __FreqSweep();
-    //         __RxRegSet();    
-    //         radio_rxNow();
-    //         rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD_RX);
-    //         app_vars.changeConfigFlag = false;
-    //         while (app_vars.changeConfigFlag==false);
-    //     }
-    // }
+        while(app_vars.rxFrameStarted == true);
+        radio_rfOff();
+        LC_FREQCHANGE(cfg_course, cfg_mid, cfg_fine);
+        delay_lc_setup();
+        for (i=0;i<NUMPKT_PER_CFG_RX;i++) {
+            // __FreqSweep();
+            __RxRegSet();    
+            radio_rxNow();
+            rftimer_setCompareIn(rftimer_readCounter()+TIMER_PERIOD_RX);
+            app_vars.changeConfigFlag = false;
+            while (app_vars.changeConfigFlag==false);
+        }
+    }
 
     while(app_vars.rxFrameStarted == true);
     radio_rfOff();
