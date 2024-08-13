@@ -18,7 +18,7 @@
 
 #define TIMER_PERIOD        50000             ///< 500 = 1ms@500kHz
 
-#define BLE_CALIBRATE_LC    false
+#define BLE_CALIBRATE_LC    true
 #define BLE_SWEEP_FINE      true
 
 //=========================== variables =======================================

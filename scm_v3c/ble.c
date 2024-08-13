@@ -61,6 +61,9 @@ void ble_init(void) {
     ble_vars.channel = 0;
 
     // Set default name.
+    // 蓝牙发包的第一步通常先得配置协议层，例如GAP、GATT这种
+    // GAP 初始化一般包括配置设备名称、设置设备图标和配置连接参数。所以这里应属于GAP初始化的部分
+    // GAP连接参数包括连接间隔、从机延迟、超时时间等等，这个在哪里配置了？我尚未看到
     ble_vars.name_tx_en = true;
     ble_vars.name[0] = 'S';
     ble_vars.name[1] = 'C';
