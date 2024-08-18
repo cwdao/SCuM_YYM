@@ -58,7 +58,7 @@ void ble_init(void) {
     ble_vars.AdvA[5] = 0xCC;
 
     // Set default channel.
-    ble_vars.channel = 0;
+    ble_vars.channel = 37;
 
     // Set default name.
     // 蓝牙发包的第一步通常先得配置协议层，例如GAP、GATT这种

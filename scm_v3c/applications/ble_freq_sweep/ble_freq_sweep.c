@@ -48,8 +48,8 @@
 #endif
 
 #ifdef HS_3
-		#define COURSE_START 23
-		#define COURSE_END   24
+		#define COURSE_START 24
+		#define COURSE_END   25
     #define MID_START    0
     #define MID_END      32
 #endif
