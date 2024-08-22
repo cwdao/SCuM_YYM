@@ -18,6 +18,8 @@
 
 #define TIMER_PERIOD        50000             ///< 500 = 1ms@500kHz
 
+// BLE TX period in milliseconds.
+#define BLE_TX_PERIOD_MS 1000  // milliseconds
 #define BLE_CALIBRATE_LC    false
 #define BLE_SWEEP_FINE      true
 
@@ -43,6 +45,7 @@ void     transmit_ble_packet(void);
 int main(void) {
 
     uint32_t calc_crc;
+  uint32_t i;
 
     memset(&app_vars, 0, sizeof(app_vars_t));
 
@@ -114,9 +117,9 @@ int main(void) {
     app_vars.tx_fine = optical_getLCFine();
 #else
     // CHANGE THESE VALUES AFTER LC CALIBRATION.
-    app_vars.tx_coarse = 23;
-    app_vars.tx_mid = 11;
-    app_vars.tx_fine = 23;
+    app_vars.tx_coarse = 22;
+    app_vars.tx_mid = 25;
+    app_vars.tx_fine = 0;
 #endif
 
     ble_gen_packet();
@@ -126,6 +129,8 @@ int main(void) {
         rftimer_setCompareIn(rftimer_readCounter() + TIMER_PERIOD);
         app_vars.txNext = false;
         while (!app_vars.txNext);
+      for (i = 0; i < 1000000; i++)
+            ;
     }
 }
 

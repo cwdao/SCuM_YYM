@@ -110,7 +110,7 @@ void perform_calibration(void) {
     optical_enable();
     
     // Wait for optical cal to finish
-    while(optical_getCalibrationFinshed() == 0);
+    while(optical_getCalibrationFinished() == 0);
     
     // Disable the radio now that it is calibrated
     radio_rfOff();

@@ -82,7 +82,7 @@ void ble_gen_packet(void) {
 
     uint8_t pdu_crc[PDU_LENGTH + CRC_LENGTH];
 
-    uint8_t lfsr = ble_vars.datawhitening_init;
+    uint8_t lfsr = (ble_vars.channel & 0x3F) | (1 << 6);  // [1 channel[6]]
 
     memset(ble_vars.packet, 0, BLE_PKT_LEN * sizeof(uint8_t));
     memset(pdu_crc, 0, (PDU_LENGTH + CRC_LENGTH) * sizeof(uint8_t));
@@ -153,10 +153,68 @@ void ble_gen_packet(void) {
         }
     }
     
-    ble_append_crc(&pdu_crc[0] ,PDU_LENGTH);
-    ble_whitening(&pdu_crc[0], PDU_LENGTH + CRC_LENGTH);
+//    ble_append_crc(&pdu_crc[0] ,PDU_LENGTH);
+//    
+//		printf("pkt : ");
+//    for (j=0;j<PDU_LENGTH + CRC_LENGTH+ 5;j++) {
+//        printf("%x ", flipChar(ble_vars.packet[j]));
+//		}
+//    printf("\r\n");
+//    
+//    ble_whitening(&pdu_crc[0], PDU_LENGTH + CRC_LENGTH);
 
-    memcpy(&ble_vars.packet[i], pdu_crc, PDU_LENGTH + CRC_LENGTH);
+//    memcpy(&ble_vars.packet[i], pdu_crc, PDU_LENGTH + CRC_LENGTH);
+    
+//        ble_append_crc(&pdu[0], pdu_length);
+    
+		printf("pkt : ");
+    for (j=0;j<PDU_LENGTH + CRC_LENGTH+ 5;j++) {
+        printf("%x ", flipChar(ble_vars.packet[j]));
+		}
+    printf("\r\n");
+//    ble_whitening(&pdu_crc[0], PDU_LENGTH + CRC_LENGTH);
+
+//  origin crc
+    for (j = 0; j < PDU_LENGTH; ++j) {
+        for (k = 7; k >= 0; --k) {
+            common = (crc1 & 1) ^ ((pdu_crc[j] & (1 << k)) >> k);
+            crc1 = (crc1 >> 1) | ((crc2 & 1) << 7);
+            crc2 = ((crc2 >> 1) | ((crc3 & 1) << 7)) ^ (common << 6) ^
+                   (common << 5);
+            crc3 = ((crc3 >> 1) | (common << 7)) ^ (common << 6) ^
+                   (common << 4) ^ (common << 3) ^ (common << 1);
+        }
+    }
+
+    crc1 = flipChar(crc1);
+    crc2 = flipChar(crc2);
+    crc3 = flipChar(crc3);
+
+    pdu_crc[j++] = crc1;
+    pdu_crc[j++] = crc2;
+    pdu_crc[j++] = crc3;
+
+//  origin whitened
+    for (j = 0; j < PDU_LENGTH + CRC_LENGTH; ++j) {
+        for (k = 7; k >= 0; --k) {
+            pdu_crc[j] = (pdu_crc[j] & ~(1 << k)) |
+                         ((pdu_crc[j] & (1 << k)) ^ ((lfsr & 1) << k));
+            lfsr = ((lfsr >> 1) | ((lfsr & 1) << 6)) ^ ((lfsr & 1) << 2);
+        }
+    } 
+
+    memcpy(&ble_vars.packet[i], &pdu_crc[0], PDU_LENGTH + CRC_LENGTH);
+    
+    printf("pkt : ");
+    for (j=0;j<PDU_LENGTH + CRC_LENGTH+ 5;j++) {
+        printf("%x ", flipChar(ble_vars.packet[j]));
+		}
+    printf("\r\n");
+    
+    // i += (PDU_LENGTH + CRC_LENGTH);
+    // for (j=i;j<(i+MAX_CTE_LEN);j++) {
+    //     ble_vars.packet[j] = 0xff;
+    // }
 }
 
 void ble_prepare_packt(uint8_t* pdu, uint8_t pdu_length){
@@ -400,7 +458,7 @@ void ble_transmit(void) {
     radio_txEnable();
 
     // Wait for LDOs to turn on.
-    for (t = 0; t < 500; ++t);
+    for (t = 0; t < 50; ++t);
 
     // Send the packet.
     ble_txNow_tx_arb_fifo();
@@ -408,7 +466,7 @@ void ble_transmit(void) {
     // Wait for transmission to finish.
     // Don't know if there is some way to know when this has finished or just busy wait (?).
     // This was determined empirically using trial and error.
-    for (t = 0; t < 10000; ++t);
+    for (t = 0; t < 1000; ++t);
 
     radio_rfOff();
 }
